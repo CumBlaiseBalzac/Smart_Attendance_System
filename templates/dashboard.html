@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dashboard</title>
+<style>
+  /* Reset margins and paddings for all elements inside topnav for consistent alignment */
+  .topnav, .topnav * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f8f4f4;
+  }
+
+  .topnav {
+    background-color: #2710ba;
+    height: 50px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #fff;
+    font-size: 16px; /* or your desired size */
+    line-height: 50px; /* match height for perfect vertical centering */
+  }
+
+  /* Make logo and nav links inline-flex for proper alignment */
+  .topnav .logo {
+    font-weight: bold;
+    font-size: 18px;
+    display: inline-flex; /* added for vertical centering */
+    align-items: center;  /* added for vertical centering */
+  }
+
+  .topnav .nav-links {
+    display: inline-flex; /* added for vertical centering */
+    align-items: center;  /* added for vertical centering */
+  }
+
+  /* Make links also inline-flex if needed for consistent alignment */
+  .topnav .nav-links a {
+    color: #fff;
+    margin-left: 15px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .topnav .nav-links a:hover {
+    text-decoration: underline;
+  }
+
+  .cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+  .card {
+    background-color: #f1efef;
+    padding: 20px;
+    flex: 1 1 200px;
+    box-shadow: 0 2px 5px rgba(23, 11, 11, 0.1);
+    text-align: center;
+    border: 1px solid #220ce0;
+    border-radius: 8px;
+  }
+  
+  .filter {
+    margin-bottom: 20px;
+  }
+  .filter input {
+    padding: 8px;
+    width: 200px;
+    margin-right: 10px;
+  }
+  .filter button {
+    padding: 8px 12px;
+  }
+  h1 {
+    text-align: center;
+  }
+  button {
+    cursor: pointer;
+    padding: 8px 12px;
+    margin: 5px;
+    border: none;
+    background-color: #220ce0;
+    color: white;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  button:hover {
+    background-color: #4e3ccf;
+  }
+  div {
+    margin-bottom: 20px;
+  }
+  .stats {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .stat {
+    background: #e0e0e0;
+    padding: 10px 20px;
+    border-radius: 8px;
+    width: 200px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  /* Make table more compact */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #ccc8d3;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 20px;
+    font-size: 13px; /* smaller font size for compactness */
+  }
+  th, td {
+    padding: 8px 10px; /* less padding for compactness */
+    border-top: 1px solid #220ce0;
+    border-bottom: 1px solid #220ce0;
+    text-align: left;
+    vertical-align: middle;
+  }
+  th {
+    background-color: #d5d6da;
+  }
+  /* Limit column widths for better layout */
+  th:nth-child(1), td:nth-child(1),
+  th:nth-child(2), td:nth-child(2),
+  th:nth-child(3), td:nth-child(3),
+  th:nth-child(4), td:nth-child(4),
+  th:nth-child(5), td:nth-child(5),
+  th:nth-child(6), td:nth-child(6),
+  th:nth-child(7), td:nth-child(7) {
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Smaller buttons inside table */
+  td button {
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+  
+  /* Duplicate table styles, kept for consistency */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #ccc8d3;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table th, table td {
+    padding: 12px;
+    border-top: 1px solid #220ce0;
+    border-bottom: 1px solid #220ce0;
+    text-align: left;
+  }
+  table th {
+    background-color: #d5d6da;
+  }
+</style>
+</head>
+<body onload="loadRegisteredStudents()">
+  <div class="topnav">
+    <div class="logo">Data Link SAS 🤖</div>
+    <div class="nav-links">
+      <a href="{{url_for('dashboard')}}">Dashboard</a>
+      <a href="{{url_for('register')}}">Register</a>
+      <a href="/train">Train</a>
+      <a href="/recognize">Recognize</a>
+      <a href="/todays_schedule">Today's Schedule</a>
+      <a href="/all_schedules">All Schedules</a>
+      <a href="{{url_for('create_user')}}">Add User</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+<h1>Dashboard</h1>
+<div>
+  <button onclick="loadDashboardCards()">Refresh Stats</button>
+  <div class="cards">
+    <div class="card"><strong>Total Users:</strong> <span id="totalUsers">0</span></div>
+    <div class="card"><strong>Total Courses:</strong> <span id="totalCourses">0</span></div>
+    <div class="card"><strong>Total Schedules:</strong> <span id="totalSchedules">0</span></div>
+    <div class="card"><strong>Attendance Records:</strong> <span id="attendanceRecords">0</span></div>
+  </div>
+</div>
+
+<h2>Registered Students</h2>
+<button onclick="loadRegisteredStudents()">Refresh Student List</button>
+<button onclick="downloadCSV()">Download CSV</button>
+<!-- Filter inputs in header -->
+<table id="studentsTable">
+  <thead>
+    <tr>
+      <th><input type="text" placeholder="Filter Name" onkeyup="filterTable()" data-column="0"></th>
+      <th><input type="text" placeholder="Filter Email" onkeyup="filterTable()" data-column="1"></th>
+      <th><input type="text" placeholder="Filter Phone" onkeyup="filterTable()" data-column="2"></th>
+      <th><input type="text" placeholder="Filter Course" onkeyup="filterTable()" data-column="3"></th>
+      <th><input type="text" placeholder="Filter Level" onkeyup="filterTable()" data-column="4"></th>
+      <th><input type="text" placeholder="Filter Section" onkeyup="filterTable()" data-column="5"></th>
+      <th></th>
+      <th></th>
+    </tr>
+    <tr>
+      <th>Name</th><th>Email</th><th>Phone</th><th>Course</th><th>Level</th><th>Section</th><th>Date Registered</th><th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  // Load dashboard stats
+async function loadDashboardCards() {
+  try {
+    const res = await fetch('/api/dashboard-cards');
+    const data = await res.json();
+    document.getElementById('totalUsers').textContent = data.totalUsers;
+    document.getElementById('totalCourses').textContent = data.totalCourses;
+    document.getElementById('totalSchedules').textContent = data.totalSchedules;
+    document.getElementById('attendanceRecords').textContent = data.attendanceRecords;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+ // Load students
+async function loadRegisteredStudents() {
+  try {
+    const res = await fetch('/api/dashboard-data');
+    const students = await res.json();
+    const tbody = document.querySelector('#studentsTable tbody');
+    tbody.innerHTML = '';
+    students.forEach(student => {
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-id', student.id);
+      tr.innerHTML = `
+        <td class="name">${student.fullname}</td>
+        <td class="email">${student.email}</td>
+        <td class="phone">${student.phone}</td>
+        <td class="course">${student.course}</td>
+        <td class="level">${student.level}</td>
+        <td class="section">${student.section}</td>
+        <td class="date">${student.date_registered}</td>
+        <td>
+          <button onclick="editRow(this)">Edit</button>
+          <button onclick="deleteStudent('${student.id}')">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// Delete student
+async function deleteStudent(id) {
+  if (!confirm('Are you sure you want to delete this student?')) return;
+  try {
+    const res = await fetch(`/api/delete-user/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      alert('Deleted successfully');
+      loadRegisteredStudents();
+      loadDashboardCards();
+    } else {
+      alert('Failed to delete');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// Variables for editing
+let currentEditRow = null;
+
+// Edit row
+function editRow(btn) {
+  const row = btn.closest('tr');
+
+  if (currentEditRow && currentEditRow !== row) {
+    alert('Finish editing the current row first.');
+    return;
+  }
+
+  if (row.getAttribute('data-editing') === 'true') return;
+
+  row.setAttribute('data-editing', 'true');
+  currentEditRow = row;
+
+  const cells = row.querySelectorAll('td');
+  const originalData = {
+    fullname: cells[0].textContent,
+    email: cells[1].textContent,
+    phone: cells[2].textContent,
+    course: cells[3].textContent,
+    level: cells[4].textContent,
+    section: cells[5].textContent
+  };
+
+  // Save original HTML
+  const originalHTML = row.innerHTML;
+
+  // Replace cells with input fields
+  ['name', 'email', 'phone', 'course', 'level', 'section'].forEach((field, index) => {
+    cells[index].innerHTML = `<input type="text" value="${originalData[field]}"/>`;
+  });
+
+  // Replace action buttons with Save/Cancel
+  cells[7].innerHTML = `
+    <button onclick="saveRow(this, '${row.getAttribute('data-id')}')">Save</button>
+    <button onclick="cancelEdit(this, '${row.getAttribute('data-id')}')">Cancel</button>
+  `;
+  row.setAttribute('data-original-html', originalHTML);
+}
+
+// Save edited row
+async function saveRow(btn, id) {
+  const row = btn.closest('tr');
+  const inputs = row.querySelectorAll('td input');
+
+  const updatedData = {
+    fullname: inputs[0].value,
+    email: inputs[1].value,
+    phone: inputs[2].value,
+    course: inputs[3].value,
+    level: inputs[4].value,
+    section: inputs[5].value
+  };
+
+  try {
+    const res = await fetch(`/api/edit-student/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(updatedData)
+    });
+    if (res.ok) {
+      alert('Updated successfully');
+      loadRegisteredStudents();
+    } else {
+      alert('Failed to update');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// Cancel edit
+function cancelEdit(btn, id) {
+  const row = btn.closest('tr');
+  const originalHTML = row.getAttribute('data-original-html');
+  row.innerHTML = originalHTML;
+  row.removeAttribute('data-editing');
+  currentEditRow = null;
+}
+
+// Filter table
+function filterTable() {
+  const filters = document.querySelectorAll('thead input');
+  const filterValues = Array.from(filters).map(input => input.value.toLowerCase());
+  const tbody = document.querySelector('#studentsTable tbody');
+  Array.from(tbody.rows).forEach(row => {
+    let show = true;
+    filterValues.forEach((val, index) => {
+      if (val && row.cells[index]) {
+        if (!row.cells[index].innerText.toLowerCase().includes(val)) {
+          show = false;
+        }
+      }
+    });
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+// Download CSV
+function downloadCSV() {
+  const table = document.getElementById('studentsTable');
+  const rows = table.querySelectorAll('tr');
+  const csv = [];
+  const headers = Array.from(rows[0].querySelectorAll('th')).map(th => th.innerText);
+  csv.push(headers.join(','));
+  for (let i = 2; i < rows.length; i++) { // skip filter row and header
+    if (rows[i].style.display === 'none') continue;
+    const cells = rows[i].querySelectorAll('td');
+    const rowData = Array.from(cells).map(td => `"${td.innerText.replace(/"/g, '""')}"`);
+    csv.push(rowData.join(','));
+  }
+  const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'students.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  loadDashboardCards();
+  loadRegisteredStudents();
+});
+</script>
+</body>
+</html>

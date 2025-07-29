@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Captured Faces</title>
+</head>
+<body>
+    <h1>Captured Faces</h1>
+    <div>
+        {% for img in images %}
+            <img src="{{ img }}" alt="Captured face" width="200"/>
+        {% endfor %}
+    </div>
+</body>
+</html>

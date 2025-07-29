@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Register Student</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+      background-color: #eef2f7;
+      color: #1f2937;
+    }
+
+    h2 {
+      text-align: center;
+      font-weight: 600;
+      margin-top: 40px;
+      color: #2563eb;
+      font-size: 28px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      padding: 30px;
+    }
+
+    /* Header */
+    .card-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    /* Layout: main wrapper with form on the left, camera on the right */
+    .layout {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    /* Form section styling */
+    .form-section {
+      flex: 1;
+      min-width: 300px;
+    }
+
+    /* Camera section styling */
+    .camera-section {
+      flex: 1;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Two-column form fields in landscape */
+    .form-fields {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .column {
+      flex: 1;
+      min-width: 200px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 20px;
+    }
+
+    label {
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    input, select {
+      padding: 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 15px;
+      width: 100%;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    input:focus, select:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+      outline: none;
+    }
+
+    /* Camera section styles */
+    .camera-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    #video {
+      width: 100%;
+      max-width: 480px;
+      height: auto;
+      border-radius: 12px;
+      border: 2px solid #3b82f6;
+      background-color: #f3f4f6;
+    }
+
+    /* Buttons styling */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 20px;
+      margin-top: 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.3s ease;
+      width: 100%;
+      max-width: 250px;
+    }
+
+    .btn i {
+      margin-right: 8px;
+    }
+
+    /* Specific buttons */
+    .btn-capture {
+      background-color: #3b82f6;
+      color: #fff;
+    }
+
+    .btn-capture:hover {
+      background-color: #2563eb;
+      transform: scale(1.02);
+    }
+
+    .btn-register {
+      background-color: #10b981;
+      color: #fff;
+    }
+
+    .btn-register:hover {
+      background-color: #059669;
+      transform: scale(1.02);
+    }
+
+    /* Floating Register Button Style */
+    #floatingRegisterBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 999;
+      padding: 16px 20px;
+      background-color: #10b981;
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: background-color 0.3s, transform 0.2s;
+    }
+
+    #floatingRegisterBtn:hover {
+      background-color: #059669;
+      transform: scale(1.02);
+    }
+
+    /* Optional: hide the button initially if you want to control visibility */
+    /* .hidden { display: none; } */
+
+    /* Responsive adjustments */
+    @media(max-width: 768px) {
+      .layout {
+        flex-direction: column;
+      }
+    }
+    .topnav, .topnav * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f8f4f4;
+  }
+
+  .topnav {
+    background-color: #2710ba;
+    height: 50px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #fff;
+    font-size: 16px; /* or your desired size */
+    line-height: 50px; /* match height for perfect vertical centering */
+  }
+
+  /* Make logo and nav links inline-flex for proper alignment */
+  .topnav .logo {
+    font-weight: bold;
+    font-size: 18px;
+    display: inline-flex; /* added for vertical centering */
+    align-items: center;  /* added for vertical centering */
+  }
+
+  .topnav .nav-links {
+    display: inline-flex; /* added for vertical centering */
+    align-items: center;  /* added for vertical centering */
+  }
+
+  /* Make links also inline-flex if needed for consistent alignment */
+  .topnav .nav-links a {
+    color: #fff;
+    margin-left: 15px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .topnav .nav-links a:hover {
+    text-decoration: underline;
+  }
+  </style>
+</head>
+<body>
+<div class="topnav">
+    <div class="logo">Data Link SAS 🤖</div>
+    <div class="nav-links">
+      <a href="{{url_for('dashboard')}}">Dashboard</a>
+      <a href="{{url_for('register')}}">Register</a>
+      <a href="/train">Train</a>
+      <a href="/recognize">Recognize</a>
+      <a href="/todays_schedule">Today's Schedule</a>
+      <a href="/all_schedules">All Schedules</a>
+      <a href="{{url_for('create_user')}}">Add User</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+
+
+  <h2>📘 Student Registration</h2>
+  
+  <!-- Main form container -->
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h3 style="margin:0; font-weight:600;">Register Student</h3>
+      </div>
+      <form id="registerForm" aria-label="Student Registration Form" novalidate>
+        <!-- Main layout: form on left, camera on right -->
+        <div class="layout">
+          <!-- Form section -->
+          <div class="form-section">
+            <div class="form-fields">
+              <!-- Left column of form -->
+              <div class="column">
+                <div class="field-group">
+                  <label for="name">Full Name</label>
+                  <input type="text" id="name" name="name" placeholder="Enter full name" required />
+                </div>
+                <div class="field-group">
+                  <label for="email">Email</label>
+                  <input type="email" id="email" name="email" placeholder="Enter email" required />
+                </div>
+                <div class="field-group">
+                  <label for="phone">Phone</label>
+                  <input type="tel" id="phone" name="phone" placeholder="Enter phone number" pattern="^[0-9\s\-()+]*$" required />
+                </div>
+              </div>
+              <!-- Right column of form -->
+              <div class="column">
+                <div class="field-group">
+                  <label for="course">Course</label>
+                  <input type="text" id="course" name="course" placeholder="Enter course" required />
+                </div>
+                <div class="field-group">
+                  <label for="level">Level</label>
+                  <input type="text" id="level" name="level" placeholder="Enter level" required />
+                </div>
+                <div class="field-group">
+                  <label for="section">Section</label>
+                  <input type="text" id="section" name="section" placeholder="Enter section" required />
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Camera section on the right -->
+          <div class="camera-section">
+            <div class="camera-title">🎥 Live Camera</div>
+            <video id="video" autoplay playsinline></video>
+            <button type="button" class="btn btn-capture" onclick="captureFace()">
+              <i class="fas fa-camera"></i> Capture Face
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Hidden Canvas for face capture -->
+  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+
+  <!-- Floating Register Button -->
+  <button id="floatingRegisterBtn" style="display: none;" onclick="submitRegistration()">
+    <i class="fas fa-user-plus"></i> Click Here to Register a New Student
+  </button>
+
+  <!-- Optional: toggle button to show/hide floating button -->
+  <div style="text-align: center; margin-top: 20px;">
+    <button class="btn toggle-btn" onclick="toggleFloatingButton()">Toggle Register Button</button>
+  </div>
+
+  <script>
+    // Start webcam on load
+    window.addEventListener('DOMContentLoaded', () => {
+      const video = document.getElementById('video');
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          video.srcObject = stream;
+        })
+        .catch(err => {
+          alert("Error accessing camera: " + err);
+        });
+    });
+
+    function captureFace() {
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = canvas.toDataURL("image/png");
+      localStorage.setItem("capturedImage", imageData);
+      alert("Face captured successfully!");
+    }
+
+    function validateForm() {
+      const form = document.getElementById('registerForm');
+      return form.checkValidity();
+    }
+
+    function submitRegistration() {
+      const btn = document.getElementById('floatingRegisterBtn');
+      btn.setAttribute('aria-busy', 'true');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+
+      const capturedImage = localStorage.getItem("capturedImage");
+      if (!capturedImage) {
+        alert("Please capture the student's face before registering.");
+        resetButton();
+        return;
+      }
+
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      const course = document.getElementById("course").value.trim();
+      const level = document.getElementById("level").value.trim();
+      const section = document.getElementById("section").value.trim();
+
+      if (!name || !email || !phone || !course || !level || !section || !validateForm()) {
+        alert("Please fill all fields correctly before submitting.");
+        resetButton();
+        return;
+      }
+
+      const data = { name, email, phone, course, level, section, image: capturedImage };
+
+      fetch('/api/save-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      .then(resp => resp.json())
+      .then(result => {
+        alert(result.message);
+        document.getElementById("registerForm").reset();
+        localStorage.removeItem("capturedImage");
+      })
+      .catch(error => {
+        alert("Error registering student: " + error);
+      })
+      .finally(() => {
+        resetButton();
+      });
+    }
+
+    function resetButton() {
+      const btn = document.getElementById('floatingRegisterBtn');
+      btn.setAttribute('aria-busy', 'false');
+      btn.innerHTML = '<i class="fas fa-user-plus"></i> Register Student';
+    }
+
+    function toggleFloatingButton() {
+      const btn = document.getElementById('floatingRegisterBtn');
+      if (btn.style.display === 'none') {
+        btn.style.display = 'block';
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+
+    // Show the floating button by default
+    document.getElementById('floatingRegisterBtn').style.display = 'block';
+  </script>
+</body>
+</html>

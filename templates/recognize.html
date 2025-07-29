@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Auto Recognize Face</title>
+  <script defer src="https://unpkg.com/face-api.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f2f2f2;
+    }
+    .topnav {
+      background-color: #2710ba;
+      padding: 0px 20px;
+      height: 50px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+    }
+    .topnav .logo {
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .topnav .nav-links a {
+      color: #fff;
+      margin-left: 15px;
+      text-decoration: none;
+    }
+    .main-container {
+      display: flex;
+      height: calc(100vh - 60px);
+    }
+    .left, .right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 10px;
+    }
+    video, canvas {
+      width: 100%;
+      max-width: 550px;
+      border-radius: 10px;
+    }
+    #result {
+      margin-top: 15px;
+      font-size: 18px;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <div class="topnav">
+    <div class="logo">Data Link SAS 🤖</div>
+    <div class="nav-links">
+      <a href="{{url_for('dashboard')}}">Dashboard</a>
+      <a href="/register">Register</a>
+      <a href="/train">Train</a>
+      <a href="/recognize">Recognize</a>
+      <a href="/todays_schedule">Today's Schedule</a>
+      <a href="/all_schedules">All Schedules</a>
+      <a href="{{url_for('create_user')}}">Add User</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <div class="left">
+      <video id="video" autoplay muted></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <div class="right">
+      <h2>Recognition Log</h2>
+      <p id="result">Loading models...</p>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const result = document.getElementById('result');
+    let labeledDescriptors = [];
+    let faceMatcher;
+
+    // Load Models
+    Promise.all([
+      faceapi.nets.faceRecognitionNet.loadFromUri('/static/models'),
+      faceapi.nets.faceLandmark68Net.loadFromUri('/static/models'),
+      faceapi.nets.ssdMobilenetv1.loadFromUri('/static/models')
+    ]).then(startVideo).then(loadLabeledData);
+
+    function startVideo() {
+      navigator.mediaDevices.getUserMedia({ video: {} })
+        .then(stream => video.srcObject = stream)
+        .catch(err => result.textContent = "Camera access error: " + err.message);
+    }
+
+    // Load encodings from server
+    async function loadLabeledData() {
+      const response = await fetch('/api/known_faces'); // You must implement this endpoint
+      const data = await response.json();
+
+      labeledDescriptors = data.map(person => {
+        const descriptors = person.descriptors.map(d => new Float32Array(d));
+        return new faceapi.LabeledFaceDescriptors(person.label, descriptors);
+      });
+
+      faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+      result.textContent = "Models loaded and ready.";
+    }
+
+    video.addEventListener('play', () => {
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
+      const ctx = overlay.getContext('2d');
+
+      setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        detections.forEach(detection => {
+          const match = faceMatcher.findBestMatch(detection.descriptor);
+          const box = detection.detection.box;
+          const text = match.toString();
+
+          // Draw rectangle and label
+          ctx.strokeStyle = "#00ff00";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(box.x, box.y, box.width, box.height);
+          ctx.font = "16px Arial";
+          ctx.fillStyle = "red";
+          ctx.fillText(text, box.x, box.y - 10);
+
+          // Send to backend to mark attendance
+          sendAttendance(match.label);
+        });
+      }, 1500); // Every 1.5 seconds
+    });
+
+    // Call Flask backend to mark attendance
+    function sendAttendance(name) {
+      if (name === 'unknown') return;
+      fetch('/api/mark_attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+      });
+    }
+  </script>
+</body>
+</html>

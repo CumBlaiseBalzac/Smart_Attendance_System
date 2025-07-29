@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>All Attendance Schedules</title>
+    <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f8f4f4;
+    }
+        h2 {
+            margin-bottom: 10px;
+        }
+        input[type="text"] {
+            padding: 6px;
+            margin-bottom: 10px;
+            width: 250px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 6px 12px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            text-align: left;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        #downloadBtns {
+            margin-bottom: 10px;
+        }
+        .topnav {
+      background-color: #2710ba;
+      padding: 0px 20px;
+      height: 50px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+    }
+
+    .topnav .logo {
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .topnav .nav-links a {
+      color: #fff;
+      margin-left: 15px;
+      text-decoration: none;
+    }
+
+    .topnav .nav-links a:hover {
+      text-decoration: underline;
+    }
+    </style>
+</head>
+<body>
+    <div class="topnav">
+    <div class="logo">Data Link SAS 🤖</div>
+    <div class="nav-links">
+      <a href="{{url_for('dashboard')}}">Dashboard</a>
+      <a href="/register">Register</a>
+      <a href="/train">Train</a>
+      <a href="/recognize">Recognize</a>
+      <a href="/todays_schedule">Today's Schedule</a>
+      <a href="/all_schedules">All Schedules</a>
+      <a href="{{url_for('create_user')}}">Add User</a>
+
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+    <h2>All Attendance Records</h2>
+
+    <input type="text" id="searchInput" placeholder="Search by name, course or date..." onkeyup="filterTable()">
+
+    <div id="downloadBtns">
+        <button onclick="downloadCSV()">Download CSV</button>
+        <button onclick="downloadPDF()">Download PDF</button>
+    </div>
+
+    <table id="attendanceTable">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Course</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Data will be populated here -->
+        </tbody>
+    </table>
+
+    <script>
+        async function fetchAttendance() {
+            const response = await fetch('/api/all_attendance');
+            const data = await response.json();
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            data.records.forEach(record => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${record.name}</td>
+                    <td>${record.course}</td>
+                    <td>${record.status}</td>
+                    <td>${record.date}</td>
+                    <td>${record.time}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function filterTable() {
+            const input = document.getElementById("searchInput").value.toLowerCase();
+            const rows = document.querySelectorAll("#attendanceTable tbody tr");
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(input) ? '' : 'none';
+            });
+        }
+
+        function downloadCSV() {
+            let rows = document.querySelectorAll("#attendanceTable tr");
+            let csv = [];
+
+            rows.forEach(row => {
+                let cols = Array.from(row.querySelectorAll("th, td")).map(col => `"${col.innerText}"`);
+                csv.push(cols.join(","));
+            });
+
+            let blob = new Blob([csv.join("\n")], { type: "text/csv" });
+            let url = URL.createObjectURL(blob);
+
+            let link = document.createElement("a");
+            link.href = url;
+            link.download = "attendance_records.csv";
+            link.click();
+        }
+
+        function downloadPDF() {
+            const table = document.getElementById('attendanceTable');
+
+            const newWin = window.open('', '', 'width=900,height=700');
+            newWin.document.write('<html><head><title>Attendance PDF</title></head><body>');
+            newWin.document.write('<h3>Attendance Records</h3>');
+            newWin.document.write(table.outerHTML);
+            newWin.document.write('</body></html>');
+            newWin.document.close();
+            newWin.print();
+        }
+
+        // Load data when the page loads
+        fetchAttendance();
+    </script>
+</body>
+</html>
