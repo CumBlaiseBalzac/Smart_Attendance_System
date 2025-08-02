@@ -80,7 +80,7 @@
       <a href="/register">Register</a>
       <a href="/train">Train</a>
       <a href="/recognize">Recognize</a>
-      <a href="/todays_schedule">Today's Schedule</a>
+      <a href="/todays_attendance">Today's Schedule</a>
       <a href="/all_schedules">All Schedules</a>
       <a href="{{url_for('create_user')}}">Add User</a>
 
@@ -161,16 +161,33 @@
         }
 
         function downloadPDF() {
-            const table = document.getElementById('attendanceTable');
+  const table = document.getElementById('attendanceTable');
 
-            const newWin = window.open('', '', 'width=900,height=700');
-            newWin.document.write('<html><head><title>Attendance PDF</title></head><body>');
-            newWin.document.write('<h3>Attendance Records</h3>');
-            newWin.document.write(table.outerHTML);
-            newWin.document.write('</body></html>');
-            newWin.document.close();
-            newWin.print();
-        }
+  const newWin = window.open('', '', 'width=900,height=700');
+
+  newWin.document.write('<html><head><title>All Time Attendance</title>');
+  // Correct CSS with border-collapse on table, and padding & borders on th/td
+  newWin.document.write(`
+    <style>
+      #attendanceTable {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      #attendanceTable th,
+      #attendanceTable td {
+        padding: 10px;
+        border: 1px solid #000;
+        text-align: left;
+      }
+    </style>
+  `);
+  newWin.document.write('</head><body>');
+  newWin.document.write('<h3>Attendance Records of All Time</h3>');
+  newWin.document.write(table.outerHTML);
+  newWin.document.write('</body></html>');
+  newWin.document.close();
+  newWin.print();
+}
 
         // Load data when the page loads
         fetchAttendance();

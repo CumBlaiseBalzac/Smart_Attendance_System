@@ -4,7 +4,6 @@
 <meta charset="UTF-8" />
 <title>Dashboard</title>
 <style>
-  /* Reset margins and paddings for all elements inside topnav for consistent alignment */
   .topnav, .topnav * {
     margin: 0;
     padding: 0;
@@ -25,24 +24,22 @@
     align-items: center;
     justify-content: space-between;
     color: #fff;
-    font-size: 16px; /* or your desired size */
-    line-height: 50px; /* match height for perfect vertical centering */
+    font-size: 16px; 
+    line-height: 50px; 
   }
 
-  /* Make logo and nav links inline-flex for proper alignment */
   .topnav .logo {
     font-weight: bold;
     font-size: 18px;
-    display: inline-flex; /* added for vertical centering */
-    align-items: center;  /* added for vertical centering */
+    display: inline-flex; 
+    align-items: center;  
   }
 
   .topnav .nav-links {
-    display: inline-flex; /* added for vertical centering */
-    align-items: center;  /* added for vertical centering */
+    display: inline-flex; 
+    align-items: center;  
   }
 
-  /* Make links also inline-flex if needed for consistent alignment */
   .topnav .nav-links a {
     color: #fff;
     margin-left: 15px;
@@ -63,8 +60,8 @@
   }
   .card {
     background-color: #f1efef;
-    padding: 20px;
-    flex: 1 1 200px;
+    padding: 40px;
+    flex: 1 1 100px;
     box-shadow: 0 2px 5px rgba(23, 11, 11, 0.1);
     text-align: center;
     border: 1px solid #220ce0;
@@ -115,7 +112,7 @@
     text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
-  /* Make table more compact */
+  
   table {
     width: 100%;
     border-collapse: collapse;
@@ -123,10 +120,10 @@
     border-radius: 8px;
     overflow: hidden;
     margin-top: 20px;
-    font-size: 13px; /* smaller font size for compactness */
+    font-size: 13px; 
   }
   th, td {
-    padding: 8px 10px; /* less padding for compactness */
+    padding: 8px 10px; 
     border-top: 1px solid #220ce0;
     border-bottom: 1px solid #220ce0;
     text-align: left;
@@ -135,7 +132,6 @@
   th {
     background-color: #d5d6da;
   }
-  /* Limit column widths for better layout */
   th:nth-child(1), td:nth-child(1),
   th:nth-child(2), td:nth-child(2),
   th:nth-child(3), td:nth-child(3),
@@ -148,13 +144,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* Smaller buttons inside table */
   td button {
     padding: 2px 6px;
     font-size: 11px;
   }
   
-  /* Duplicate table styles, kept for consistency */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -173,7 +167,7 @@
   }
 </style>
 </head>
-<body onload="loadRegisteredStudents()">
+<body onload="loadDashboardCards()">
   <div class="topnav">
     <div class="logo">Data Link SAS 🤖</div>
     <div class="nav-links">
@@ -181,7 +175,7 @@
       <a href="{{url_for('register')}}">Register</a>
       <a href="/train">Train</a>
       <a href="/recognize">Recognize</a>
-      <a href="/todays_schedule">Today's Schedule</a>
+      <a href="/todays_attendance">Today's Schedule</a>
       <a href="/all_schedules">All Schedules</a>
       <a href="{{url_for('create_user')}}">Add User</a>
       <a href="/logout">Logout</a>
@@ -191,10 +185,11 @@
 <div>
   <button onclick="loadDashboardCards()">Refresh Stats</button>
   <div class="cards">
-    <div class="card"><strong>Total Users:</strong> <span id="totalUsers">0</span></div>
+    <div class="card"><strong>Total Students:</strong> <span id="totalUsers">0</span></div>
     <div class="card"><strong>Total Courses:</strong> <span id="totalCourses">0</span></div>
-    <div class="card"><strong>Total Schedules:</strong> <span id="totalSchedules">0</span></div>
+    <div class="card"><strong>Today's Attendance:</strong> <span id="totalSchedules">0</span></div>
     <div class="card"><strong>Attendance Records:</strong> <span id="attendanceRecords">0</span></div>
+    <div class="card"><strong>Today's Absentees:</strong> <span id="absenteeCount">0</span></div>
   </div>
 </div>
 
@@ -232,7 +227,7 @@ async function loadDashboardCards() {
     document.getElementById('totalSchedules').textContent = data.totalSchedules;
     document.getElementById('attendanceRecords').textContent = data.attendanceRecords;
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching dashboard data:', err);
   }
 }
 
@@ -262,7 +257,7 @@ async function loadRegisteredStudents() {
       tbody.appendChild(tr);
     });
   } catch (err) {
-    console.error(err);
+    console.error('Error loading students:', err);
   }
 }
 
@@ -279,14 +274,12 @@ async function deleteStudent(id) {
       alert('Failed to delete');
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error deleting student:', err);
   }
 }
 
-// Variables for editing
 let currentEditRow = null;
 
-// Edit row
 function editRow(btn) {
   const row = btn.closest('tr');
 
@@ -310,15 +303,12 @@ function editRow(btn) {
     section: cells[5].textContent
   };
 
-  // Save original HTML
   const originalHTML = row.innerHTML;
 
-  // Replace cells with input fields
   ['name', 'email', 'phone', 'course', 'level', 'section'].forEach((field, index) => {
     cells[index].innerHTML = `<input type="text" value="${originalData[field]}"/>`;
   });
 
-  // Replace action buttons with Save/Cancel
   cells[7].innerHTML = `
     <button onclick="saveRow(this, '${row.getAttribute('data-id')}')">Save</button>
     <button onclick="cancelEdit(this, '${row.getAttribute('data-id')}')">Cancel</button>
@@ -326,7 +316,6 @@ function editRow(btn) {
   row.setAttribute('data-original-html', originalHTML);
 }
 
-// Save edited row
 async function saveRow(btn, id) {
   const row = btn.closest('tr');
   const inputs = row.querySelectorAll('td input');
@@ -353,11 +342,10 @@ async function saveRow(btn, id) {
       alert('Failed to update');
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error updating student:', err);
   }
 }
 
-// Cancel edit
 function cancelEdit(btn, id) {
   const row = btn.closest('tr');
   const originalHTML = row.getAttribute('data-original-html');
@@ -366,7 +354,6 @@ function cancelEdit(btn, id) {
   currentEditRow = null;
 }
 
-// Filter table
 function filterTable() {
   const filters = document.querySelectorAll('thead input');
   const filterValues = Array.from(filters).map(input => input.value.toLowerCase());
@@ -384,7 +371,6 @@ function filterTable() {
   });
 }
 
-// Download CSV
 function downloadCSV() {
   const table = document.getElementById('studentsTable');
   const rows = table.querySelectorAll('tr');

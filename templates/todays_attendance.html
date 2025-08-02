@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Today's Attendance</title>
+<link rel="stylesheet" href="/static/style.css" />
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: #f8f4f4;
+  }
+
+  h2 {
+    text-align: center;
+    color: #333;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    margin-top: 20px;
+  }
+
+  table, th, td {
+    border: 1px solid #ccc;
+  }
+
+  th, td {
+    padding: 12px;
+    text-align: left;
+  }
+
+  th {
+    background: #2c3e50;
+    color: white;
+  }
+
+  .download-btn {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 25px;
+    background-color: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .download-btn:hover {
+    background-color: #219150;
+  }
+
+  .topnav {
+    background-color: #2710ba;
+    padding: 0px 20px;
+    height: 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+  }
+
+  .topnav .logo {
+    font-weight: bold;
+    font-size: 18px;
+  }
+
+  .topnav .nav-links a {
+    color: #fff;
+    margin-left: 15px;
+    text-decoration: none;
+  }
+
+  .topnav .nav-links a:hover {
+    text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+<div class="topnav">
+  <div class="logo">Data Link SAS 🤖</div>
+  <div class="nav-links">
+    <a href="{{url_for('dashboard')}}">Dashboard</a>
+    <a href="/register">Register</a>
+    <a href="/train">Train</a>
+    <a href="/recognize">Recognize</a>
+    <a href="/todays_attendance">Today's Schedule</a>
+    <a href="/all_schedules">All Schedules</a>
+    <a href="{{url_for('create_user')}}">Add User</a>
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+
+<h2>Today's Attendance</h2>
+
+<!-- Optional: Add a date input to fetch other dates -->
+<div style="text-align:center; margin-bottom:10px;">
+  <input type="date" id="datePicker" />
+  <button onclick="loadAttendance()">Load Attendance</button>
+</div>
+
+<button class="download-btn" onclick="downloadPDF()">Download PDF</button>
+
+<table id="attendanceTable">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Course</th>
+      <th>Level</th>
+      <th>Section</th>
+      <th>Time</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody id="attendanceBody">
+    <tr><td colspan="6" style="text-align:center;">Loading...</td></tr>
+  </tbody>
+</table>
+
+<script>
+  // Function to load attendance, optionally for a specific date
+  async function loadAttendance() {
+  const dateInput = document.getElementById('datePicker').value;
+  let url = '/api/today_attendance';
+
+  if (dateInput) {
+    url += '?date=' + encodeURIComponent(dateInput);
+  }
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const tbody = document.getElementById("attendanceBody");
+    tbody.innerHTML = "";
+
+    if (data.attendance.length === 0) {
+      tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>No attendance data for selected date</td></tr>";
+      return;
+    }
+
+    data.attendance.forEach(record => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${record.name}</td>
+        <td>${record.course}</td>
+        <td>${record.level}</td>
+        <td>${record.section}</td>
+        <td>${record.time}</td>
+        <td>${record.status}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  } catch (err) {
+    console.error(err);
+    document.getElementById("attendanceBody").innerHTML = "<tr><td colspan='6'>Error loading data</td></tr>";
+  }
+}
+window.onload = loadAttendance;
+
+  function downloadPDF() {
+  const table = document.getElementById('attendanceTable');
+
+  const newWin = window.open('', '', 'width=900,height=700');
+
+  newWin.document.write('<html><head><title>Today\'s Attendance</title>');
+  // Correct CSS with border-collapse on table, and padding & borders on th/td
+  newWin.document.write(`
+    <style>
+      #attendanceTable {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      #attendanceTable th,
+      #attendanceTable td {
+        padding: 10px;
+        border: 1px solid #000;
+        text-align: left;
+      }
+    </style>
+  `);
+  newWin.document.write('</head><body>');
+  newWin.document.write('<h3>Today\'s Attendance Records</h3>');
+  newWin.document.write(table.outerHTML);
+  newWin.document.write('</body></html>');
+  newWin.document.close();
+  newWin.print();
+}
+// Load data when the page loads
+        fetchAttendance();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+Running Script deactivate
+
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+Environment activation
+.\venv310\Scripts\Activate.ps1

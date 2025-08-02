@@ -29,7 +29,7 @@ cursor.execute('''
     )
 ''')
 
-# ✅ Create attendance table
+
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS attendance (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
