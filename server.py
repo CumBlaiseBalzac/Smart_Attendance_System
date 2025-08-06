@@ -165,14 +165,31 @@ def todays_attendance():
 def api_all_attendance():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('SELECT name, course, status, date, time FROM attendance ORDER BY date DESC, time DESC')
+    cursor.execute('SELECT id, name, course, status, date, time FROM attendance ORDER BY date DESC, time DESC')
     rows = cursor.fetchall()
     conn.close()
     records = [
-        {'name': row[0], 'course': row[1], 'status': row[2], 'date': row[3], 'time': row[4]}
+        {
+            'id': row[0],
+            'name': row[1],
+            'course': row[2],
+            'status': row[3],
+            'date': row[4],
+            'time': row[5]
+        }
         for row in rows
     ]
     return jsonify({'records': records})
+
+@app.route('/api/delete-attendance/<int:attendance_id>', methods=['DELETE'])
+def delete_attendance(attendance_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM attendance WHERE id = ?", (attendance_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Attendance record deleted'}), 200
+
 
 @app.route('/download_csv')
 def download_csv():
@@ -378,7 +395,9 @@ def dashboard_cards():
     c.execute("SELECT COUNT(DISTINCT course) FROM students")
     total_courses = c.fetchone()[0]
 
-    c.execute("SELECT COUNT(*) FROM schedules")
+    # ✅ Fixed: Count today's attendance from attendance table, not schedules
+    today = datetime.now().strftime('%Y-%m-%d')
+    c.execute("SELECT COUNT(*) FROM attendance WHERE date = ?", (today,))
     total_schedules = c.fetchone()[0]
 
     c.execute("SELECT COUNT(*) FROM attendance")
@@ -389,7 +408,7 @@ def dashboard_cards():
     return jsonify({
         'totalUsers': total_users,
         'totalCourses': total_courses,
-        'totalSchedules': total_schedules,
+        'totalSchedules': total_schedules,  # Now correctly shows today's attendance
         'attendanceRecords': attendance_records
     })
 
@@ -600,18 +619,44 @@ def get_absent_students():
 
 @app.route('/api/today_attendance')
 def get_today_attendance():
-    today = date.today()
+    selected_date = request.args.get('date')
+    selected_course = request.args.get('course')
 
-    records = Attendance.query.filter(Attendance.date == today).all()
-    data = [{
-        'name': rec.student_name,
-        'course': rec.course,
-        'level': rec.level,
-        'section': rec.section,
-        'time': rec.time.strftime('%H:%M:%S'),
-        'status': rec.status
-    } for rec in records]
-    return jsonify({'attendance': data})
+    if not selected_date:
+        selected_date = datetime.now().strftime('%Y-%m-%d')
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    # Base query
+    query = '''
+        SELECT s.name, s.course, s.level, s.section, a.time, a.status
+        FROM students s
+        JOIN attendance a ON s.name = a.name
+        WHERE a.date = ?
+    '''
+    params = [selected_date]
+
+    if selected_course:
+        query += ' AND s.course = ?'
+        params.append(selected_course)
+
+    cursor.execute(query, params)
+    records = cursor.fetchall()
+    conn.close()
+
+    attendance = []
+    for rec in records:
+        attendance.append({
+            'name': rec[0],
+            'course': rec[1],
+            'level': rec[2],
+            'section': rec[3],
+            'time': rec[4],
+            'status': rec[5]
+        })
+
+    return jsonify({'attendance': attendance})
 
 
 
@@ -666,6 +711,27 @@ def download_today_pdf():
 
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name=f"Attendance_{date_str}.pdf", mimetype='application/pdf')
+
+@app.route('/api/courses')
+def get_courses():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT DISTINCT course FROM students ORDER BY course')
+    rows = cursor.fetchall()
+    conn.close()
+
+    courses = [row[0] for row in rows if row[0]]  # Skip any null/empty course
+    return jsonify({'courses': courses})
+
+@app.route('/api/delete-attendance/<int:attendance_id>', methods=['DELETE'])
+def delete_attendance(attendance_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM attendance WHERE id = ?", (attendance_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Attendance record deleted'}), 200
+
 if __name__ == '__main__':
     initialize_db()
     app.run(debug=True)

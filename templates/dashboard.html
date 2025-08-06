@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Dashboard</title>
-<style>
+  <meta charset="UTF-8" />
+  <title>Dashboard</title>
+  <style>
   .topnav, .topnav * {
     margin: 0;
     padding: 0;
@@ -167,7 +167,7 @@
   }
 </style>
 </head>
-<body onload="loadDashboardCards()">
+<body>
   <div class="topnav">
     <div class="logo">Data Link SAS 🤖</div>
     <div class="nav-links">
@@ -181,222 +181,244 @@
       <a href="/logout">Logout</a>
     </div>
   </div>
-<h1>Dashboard</h1>
-<div>
-  <button onclick="loadDashboardCards()">Refresh Stats</button>
-  <div class="cards">
-    <div class="card"><strong>Total Students:</strong> <span id="totalUsers">0</span></div>
-    <div class="card"><strong>Total Courses:</strong> <span id="totalCourses">0</span></div>
-    <div class="card"><strong>Today's Attendance:</strong> <span id="totalSchedules">0</span></div>
-    <div class="card"><strong>Attendance Records:</strong> <span id="attendanceRecords">0</span></div>
-    <div class="card"><strong>Today's Absentees:</strong> <span id="absenteeCount">0</span></div>
+
+  <h1>Dashboard</h1>
+  <div>
+    <button onclick="loadDashboardCards()">Refresh Stats</button>
+    <div class="cards">
+      <div class="card"><strong>Total Students:</strong> <span id="totalUsers">0</span></div>
+      <div class="card"><strong>Total Courses:</strong> <span id="totalCourses">0</span></div>
+      <div class="card"><strong>Today's Attendance:</strong> <span id="totalSchedules">0</span></div>
+      <div class="card"><strong>Attendance Records:</strong> <span id="attendanceRecords">0</span></div>
+      <div class="card"><strong>Today's Absentees:</strong> <span id="absenteeCount">0</span></div>
+    </div>
   </div>
-</div>
 
-<h2>Registered Students</h2>
-<button onclick="loadRegisteredStudents()">Refresh Student List</button>
-<button onclick="downloadCSV()">Download CSV</button>
-<!-- Filter inputs in header -->
-<table id="studentsTable">
-  <thead>
-    <tr>
-      <th><input type="text" placeholder="Filter Name" onkeyup="filterTable()" data-column="0"></th>
-      <th><input type="text" placeholder="Filter Email" onkeyup="filterTable()" data-column="1"></th>
-      <th><input type="text" placeholder="Filter Phone" onkeyup="filterTable()" data-column="2"></th>
-      <th><input type="text" placeholder="Filter Course" onkeyup="filterTable()" data-column="3"></th>
-      <th><input type="text" placeholder="Filter Level" onkeyup="filterTable()" data-column="4"></th>
-      <th><input type="text" placeholder="Filter Section" onkeyup="filterTable()" data-column="5"></th>
-      <th></th>
-      <th></th>
-    </tr>
-    <tr>
-      <th>Name</th><th>Email</th><th>Phone</th><th>Course</th><th>Level</th><th>Section</th><th>Date Registered</th><th>Actions</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
+  <h2>Registered Students</h2>
+  <button onclick="loadRegisteredStudents()">Refresh Student List</button>
+  <button onclick="downloadCSV()">Download CSV</button>
 
-<script>
-  // Load dashboard stats
-async function loadDashboardCards() {
-  try {
-    const res = await fetch('/api/dashboard-cards');
-    const data = await res.json();
-    document.getElementById('totalUsers').textContent = data.totalUsers;
-    document.getElementById('totalCourses').textContent = data.totalCourses;
-    document.getElementById('totalSchedules').textContent = data.totalSchedules;
-    document.getElementById('attendanceRecords').textContent = data.attendanceRecords;
-  } catch (err) {
-    console.error('Error fetching dashboard data:', err);
-  }
-}
+  <table id="studentsTable">
+    <thead>
+      <tr>
+        <th><input type="text" placeholder="Filter Name" onkeyup="filterTable()" data-column="0"></th>
+        <th><input type="text" placeholder="Filter Email" onkeyup="filterTable()" data-column="1"></th>
+        <th><input type="text" placeholder="Filter Phone" onkeyup="filterTable()" data-column="2"></th>
+        <th><input type="text" placeholder="Filter Course" onkeyup="filterTable()" data-column="3"></th>
+        <th><input type="text" placeholder="Filter Level" onkeyup="filterTable()" data-column="4"></th>
+        <th><input type="text" placeholder="Filter Section" onkeyup="filterTable()" data-column="5"></th>
+        <th></th>
+        <th></th>
+      </tr>
+      <tr>
+        <th>Name</th><th>Email</th><th>Phone</th><th>Course</th><th>Level</th><th>Section</th><th>Date Registered</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
- // Load students
-async function loadRegisteredStudents() {
-  try {
-    const res = await fetch('/api/dashboard-data');
-    const students = await res.json();
-    const tbody = document.querySelector('#studentsTable tbody');
-    tbody.innerHTML = '';
-    students.forEach(student => {
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-id', student.id);
-      tr.innerHTML = `
-        <td class="name">${student.fullname}</td>
-        <td class="email">${student.email}</td>
-        <td class="phone">${student.phone}</td>
-        <td class="course">${student.course}</td>
-        <td class="level">${student.level}</td>
-        <td class="section">${student.section}</td>
-        <td class="date">${student.date_registered}</td>
-        <td>
-          <button onclick="editRow(this)">Edit</button>
-          <button onclick="deleteStudent('${student.id}')">Delete</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (err) {
-    console.error('Error loading students:', err);
-  }
-}
-
-// Delete student
-async function deleteStudent(id) {
-  if (!confirm('Are you sure you want to delete this student?')) return;
-  try {
-    const res = await fetch(`/api/delete-user/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      alert('Deleted successfully');
-      loadRegisteredStudents();
-      loadDashboardCards();
-    } else {
-      alert('Failed to delete');
-    }
-  } catch (err) {
-    console.error('Error deleting student:', err);
-  }
-}
-
-let currentEditRow = null;
-
-function editRow(btn) {
-  const row = btn.closest('tr');
-
-  if (currentEditRow && currentEditRow !== row) {
-    alert('Finish editing the current row first.');
-    return;
-  }
-
-  if (row.getAttribute('data-editing') === 'true') return;
-
-  row.setAttribute('data-editing', 'true');
-  currentEditRow = row;
-
-  const cells = row.querySelectorAll('td');
-  const originalData = {
-    fullname: cells[0].textContent,
-    email: cells[1].textContent,
-    phone: cells[2].textContent,
-    course: cells[3].textContent,
-    level: cells[4].textContent,
-    section: cells[5].textContent
-  };
-
-  const originalHTML = row.innerHTML;
-
-  ['name', 'email', 'phone', 'course', 'level', 'section'].forEach((field, index) => {
-    cells[index].innerHTML = `<input type="text" value="${originalData[field]}"/>`;
-  });
-
-  cells[7].innerHTML = `
-    <button onclick="saveRow(this, '${row.getAttribute('data-id')}')">Save</button>
-    <button onclick="cancelEdit(this, '${row.getAttribute('data-id')}')">Cancel</button>
-  `;
-  row.setAttribute('data-original-html', originalHTML);
-}
-
-async function saveRow(btn, id) {
-  const row = btn.closest('tr');
-  const inputs = row.querySelectorAll('td input');
-
-  const updatedData = {
-    fullname: inputs[0].value,
-    email: inputs[1].value,
-    phone: inputs[2].value,
-    course: inputs[3].value,
-    level: inputs[4].value,
-    section: inputs[5].value
-  };
-
-  try {
-    const res = await fetch(`/api/edit-student/${id}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(updatedData)
-    });
-    if (res.ok) {
-      alert('Updated successfully');
-      loadRegisteredStudents();
-    } else {
-      alert('Failed to update');
-    }
-  } catch (err) {
-    console.error('Error updating student:', err);
-  }
-}
-
-function cancelEdit(btn, id) {
-  const row = btn.closest('tr');
-  const originalHTML = row.getAttribute('data-original-html');
-  row.innerHTML = originalHTML;
-  row.removeAttribute('data-editing');
-  currentEditRow = null;
-}
-
-function filterTable() {
-  const filters = document.querySelectorAll('thead input');
-  const filterValues = Array.from(filters).map(input => input.value.toLowerCase());
-  const tbody = document.querySelector('#studentsTable tbody');
-  Array.from(tbody.rows).forEach(row => {
-    let show = true;
-    filterValues.forEach((val, index) => {
-      if (val && row.cells[index]) {
-        if (!row.cells[index].innerText.toLowerCase().includes(val)) {
-          show = false;
+  <script>
+    async function loadDashboardCards() {
+      try {
+        const res = await fetch('/api/dashboard-cards');
+        const data = await res.json();
+        document.getElementById('totalUsers').textContent = data.totalUsers;
+        document.getElementById('totalCourses').textContent = data.totalCourses;
+        document.getElementById('totalSchedules').textContent = data.totalSchedules;
+        document.getElementById('attendanceRecords').textContent = data.attendanceRecords;
+        
+        // Optional: update absenteeCount if your API returns it
+        if (data.absenteeCount !== undefined) {
+          document.getElementById('absenteeCount').textContent = data.absenteeCount;
         }
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
       }
+    }
+
+    async function loadRegisteredStudents() {
+      try {
+        const res = await fetch('/api/dashboard-data');
+        const students = await res.json();
+        const tbody = document.querySelector('#studentsTable tbody');
+        tbody.innerHTML = '';
+        students.forEach(student => {
+          const tr = document.createElement('tr');
+          tr.setAttribute('data-id', student.id);
+          tr.innerHTML = `
+            <td class="name">${student.fullname}</td>
+            <td class="email">${student.email}</td>
+            <td class="phone">${student.phone}</td>
+            <td class="course">${student.course}</td>
+            <td class="level">${student.level}</td>
+            <td class="section">${student.section}</td>
+            <td class="date">${student.date_registered}</td>
+            <td>
+              <button onclick="editRow(this)">Edit</button>
+              <button onclick="deleteStudent('${student.id}')">Delete</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error loading students:', err);
+      }
+    }
+
+    async function loadPresentAndAbsentLists() {
+      try {
+        const [registeredRes, attendanceRes] = await Promise.all([
+          fetch('/api/dashboard-data'),
+          fetch('/api/today_attendance')
+        ]);
+        const registered = await registeredRes.json();
+        const present = (await attendanceRes.json()).attendance;
+
+        const presentEmails = new Set(present.map(p => p.email?.toLowerCase() || p.name.toLowerCase()));
+        const absenteeCount = registered.filter(
+          student => !presentEmails.has(student.email?.toLowerCase() || student.fullname.toLowerCase())
+        ).length;
+
+        document.getElementById('absenteeCount').textContent = absenteeCount;
+
+      } catch (err) {
+        console.error('Error loading present/absent data:', err);
+      }
+    }
+
+    async function deleteStudent(id) {
+      if (!confirm('Are you sure you want to delete this student?')) return;
+      try {
+        const res = await fetch(`/api/delete-user/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          alert('Deleted successfully');
+          loadRegisteredStudents();
+          loadDashboardCards();
+        } else {
+          alert('Failed to delete');
+        }
+      } catch (err) {
+        console.error('Error deleting student:', err);
+      }
+    }
+
+    let currentEditRow = null;
+
+    function editRow(btn) {
+      const row = btn.closest('tr');
+      if (currentEditRow && currentEditRow !== row) {
+        alert('Finish editing the current row first.');
+        return;
+      }
+      if (row.getAttribute('data-editing') === 'true') return;
+      row.setAttribute('data-editing', 'true');
+      currentEditRow = row;
+
+      const cells = row.querySelectorAll('td');
+      const originalData = {
+        fullname: cells[0].textContent,
+        email: cells[1].textContent,
+        phone: cells[2].textContent,
+        course: cells[3].textContent,
+        level: cells[4].textContent,
+        section: cells[5].textContent
+      };
+
+      const originalHTML = row.innerHTML;
+
+      ['name', 'email', 'phone', 'course', 'level', 'section'].forEach((field, index) => {
+        cells[index].innerHTML = `<input type="text" value="${originalData[field]}"/>`;
+      });
+
+      cells[7].innerHTML = `
+        <button onclick="saveRow(this, '${row.getAttribute('data-id')}')">Save</button>
+        <button onclick="cancelEdit(this, '${row.getAttribute('data-id')}')">Cancel</button>
+      `;
+      row.setAttribute('data-original-html', originalHTML);
+    }
+
+    async function saveRow(btn, id) {
+      const row = btn.closest('tr');
+      const inputs = row.querySelectorAll('td input');
+
+      const updatedData = {
+        fullname: inputs[0].value,
+        email: inputs[1].value,
+        phone: inputs[2].value,
+        course: inputs[3].value,
+        level: inputs[4].value,
+        section: inputs[5].value
+      };
+
+      try {
+        const res = await fetch(`/api/edit-student/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedData)
+        });
+        if (res.ok) {
+          alert('Updated successfully');
+          loadRegisteredStudents();
+        } else {
+          alert('Failed to update');
+        }
+      } catch (err) {
+        console.error('Error updating student:', err);
+      }
+    }
+
+    function cancelEdit(btn, id) {
+      const row = btn.closest('tr');
+      const originalHTML = row.getAttribute('data-original-html');
+      row.innerHTML = originalHTML;
+      row.removeAttribute('data-editing');
+      currentEditRow = null;
+    }
+
+    function filterTable() {
+      const filters = document.querySelectorAll('thead input');
+      const filterValues = Array.from(filters).map(input => input.value.toLowerCase());
+      const tbody = document.querySelector('#studentsTable tbody');
+      Array.from(tbody.rows).forEach(row => {
+        let show = true;
+        filterValues.forEach((val, index) => {
+          if (val && row.cells[index]) {
+            if (!row.cells[index].innerText.toLowerCase().includes(val)) {
+              show = false;
+            }
+          }
+        });
+        row.style.display = show ? '' : 'none';
+      });
+    }
+
+    function downloadCSV() {
+      const table = document.getElementById('studentsTable');
+      const rows = table.querySelectorAll('tr');
+      const csv = [];
+      const headers = Array.from(rows[0].querySelectorAll('th')).map(th => th.innerText);
+      csv.push(headers.join(','));
+      for (let i = 2; i < rows.length; i++) {
+        if (rows[i].style.display === 'none') continue;
+        const cells = rows[i].querySelectorAll('td');
+        const rowData = Array.from(cells).map(td => `"${td.innerText.replace(/"/g, '""')}"`);
+        csv.push(rowData.join(','));
+      }
+      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'students.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Initialize all
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDashboardCards();
+      loadRegisteredStudents();
+      loadPresentAndAbsentLists();
     });
-    row.style.display = show ? '' : 'none';
-  });
-}
-
-function downloadCSV() {
-  const table = document.getElementById('studentsTable');
-  const rows = table.querySelectorAll('tr');
-  const csv = [];
-  const headers = Array.from(rows[0].querySelectorAll('th')).map(th => th.innerText);
-  csv.push(headers.join(','));
-  for (let i = 2; i < rows.length; i++) { // skip filter row and header
-    if (rows[i].style.display === 'none') continue;
-    const cells = rows[i].querySelectorAll('td');
-    const rowData = Array.from(cells).map(td => `"${td.innerText.replace(/"/g, '""')}"`);
-    csv.push(rowData.join(','));
-  }
-  const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'students.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  loadDashboardCards();
-  loadRegisteredStudents();
-});
-</script>
+  </script>
 </body>
 </html>

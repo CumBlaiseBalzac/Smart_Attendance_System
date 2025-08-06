@@ -99,6 +99,11 @@
 <!-- Optional: Add a date input to fetch other dates -->
 <div style="text-align:center; margin-bottom:10px;">
   <input type="date" id="datePicker" />
+  <select id="courseFilter">
+  <option value="">-- Filter by Course --</option>
+</select><br><br>
+
+
   <button onclick="loadAttendance()">Load Attendance</button>
 </div>
 
@@ -124,11 +129,13 @@
   // Function to load attendance, optionally for a specific date
   async function loadAttendance() {
   const dateInput = document.getElementById('datePicker').value;
+  const courseFilter = document.getElementById('courseFilter').value;
   let url = '/api/today_attendance';
 
-  if (dateInput) {
-    url += '?date=' + encodeURIComponent(dateInput);
-  }
+  const params = new URLSearchParams();
+  if (dateInput) params.append('date', dateInput);
+  if (courseFilter) params.append('course', courseFilter);
+  if ([...params].length > 0) url += '?' + params.toString();
 
   try {
     const res = await fetch(url);
@@ -138,7 +145,7 @@
     tbody.innerHTML = "";
 
     if (data.attendance.length === 0) {
-      tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>No attendance data for selected date</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>No attendance data for selected filters</td></tr>";
       return;
     }
 
@@ -159,7 +166,7 @@
     document.getElementById("attendanceBody").innerHTML = "<tr><td colspan='6'>Error loading data</td></tr>";
   }
 }
-window.onload = loadAttendance;
+
 
   function downloadPDF() {
   const table = document.getElementById('attendanceTable');
@@ -190,7 +197,29 @@ window.onload = loadAttendance;
   newWin.print();
 }
 // Load data when the page loads
-        fetchAttendance();
+       window.onload = () => {
+  loadCourses();
+  loadAttendance();
+};
+
+
+async function loadCourses() {
+  try {
+    const res = await fetch('/api/courses');
+    const data = await res.json();
+
+    const select = document.getElementById('courseFilter');
+    data.courses.forEach(course => {
+      const option = document.createElement('option');
+      option.value = course;
+      option.textContent = course;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error('Failed to load courses:', err);
+  }
+}
+
 </script>
 </body>
 </html>
