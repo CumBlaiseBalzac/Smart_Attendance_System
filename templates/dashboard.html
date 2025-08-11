@@ -174,10 +174,10 @@
       <a href="{{url_for('dashboard')}}">Dashboard</a>
       <a href="{{url_for('register')}}">Register</a>
       <a href="/train">Train</a>
-      <a href="/recognize">Recognize</a>
+      <a href="/select_course">Recognize</a>
       <a href="/todays_attendance">Today's Schedule</a>
       <a href="/all_schedules">All Schedules</a>
-      <a href="{{url_for('create_user')}}">Add User</a>
+      <a href="{{url_for('create_user')}}">Admin</a>
       <a href="/logout">Logout</a>
     </div>
   </div>
@@ -266,25 +266,36 @@
     }
 
     async function loadPresentAndAbsentLists() {
-      try {
-        const [registeredRes, attendanceRes] = await Promise.all([
-          fetch('/api/dashboard-data'),
-          fetch('/api/today_attendance')
-        ]);
-        const registered = await registeredRes.json();
-        const present = (await attendanceRes.json()).attendance;
+  try {
+    const [registeredRes, attendanceRes] = await Promise.all([
+      fetch('/api/dashboard-data'),
+      fetch('/api/today_attendance')
+    ]);
+    const registered = await registeredRes.json();
+    const present = (await attendanceRes.json()).attendance;
 
-        const presentEmails = new Set(present.map(p => p.email?.toLowerCase() || p.name.toLowerCase()));
-        const absenteeCount = registered.filter(
-          student => !presentEmails.has(student.email?.toLowerCase() || student.fullname.toLowerCase())
-        ).length;
+    // Use full name comparison only (no email)
+    const presentNames = new Set(
+      present.map(p => p.name?.toLowerCase().trim()).filter(Boolean)
+    );
 
-        document.getElementById('absenteeCount').textContent = absenteeCount;
+    const absenteeCount = registered.filter(
+      student => !presentNames.has(student.fullname?.toLowerCase().trim())
+    ).length;
 
-      } catch (err) {
-        console.error('Error loading present/absent data:', err);
-      }
-    }
+    // Debug logs
+    console.log("Registered Students:", registered.length);
+    console.log("Present Today:", present.length);
+    console.log("Names of Present:", [...presentNames]);
+    console.log("Absentee Count:", absenteeCount);
+    console.log("Raw Attendance Data:", present);
+
+    document.getElementById('absenteeCount').textContent = absenteeCount;
+
+  } catch (err) {
+    console.error('Error loading present/absent data:', err);
+  }
+}
 
     async function deleteStudent(id) {
       if (!confirm('Are you sure you want to delete this student?')) return;

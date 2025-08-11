@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Course Selection</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f2f2f2;
+    }
+
+    .topnav {
+      background-color: #2710ba;
+      padding: 0px 20px;
+      height: 50px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+    }
+
+    .topnav .logo {
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .topnav .nav-links a {
+      color: #fff;
+      margin-left: 15px;
+      text-decoration: none;
+    }
+    #selectCourse{
+            width: 30%;
+            padding: 40px;
+            background-color: #ffffff;
+            text-align: center;
+            margin: auto;
+            color: #2710ba;
+            margin-top: 100px;
+            border-radius: 50px;
+    }
+   
+  </style>
+</head>
+<body>
+  <div class="topnav">
+    <div class="logo">Data Link SAS 🤖</div>
+    <div class="nav-links">
+      <a href="{{url_for('dashboard')}}">Dashboard</a>
+      <a href="/register">Register</a>
+      <a href="/train">Train</a>
+      <a href="/select_course">Recognize</a>
+      <a href="/todays_attendance">Today's Schedule</a>
+      <a href="/all_schedules">All Schedules</a>
+      <a href="{{url_for('create_user')}}">Admin</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+<div id="selectCourse">
+  <h2>Select Course for Attendance</h2>
+  <form id="courseForm">
+    <select id="courseDropdown" required>
+      <!-- Options will be populated dynamically -->
+    </select>
+    <button type="button" onclick="startAttendance()">Start Attendance</button>
+  </form>
+</div>
+  <script>
+    // Wait until DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      // Fetch courses and populate the dropdown
+      fetch('/api/courses')
+        .then(response => response.json())
+        .then(data => {
+          const courses = data.courses; 
+          const select = document.getElementById('courseDropdown');
+          select.innerHTML = ''; 
+
+          courses.forEach(course => {
+            const option = document.createElement('option');
+            option.value = course;
+            option.textContent = course;
+            select.appendChild(option);
+          });
+        })
+        .catch(error => {
+          console.error('Error fetching courses:', error);
+        });
+    });
+
+    // Use the same ID as your dropdown
+    function startAttendance() {
+      const courseId = document.getElementById('courseDropdown').value;
+
+      // Save selected course in sessionStorage
+      sessionStorage.setItem('selectedCourse', courseId);
+
+      // Redirect to recognize page or start recognition
+      window.location.href = "{{ url_for('recognize') }}";    }
+
+    // Example: get selected course later (when needed)
+    const selectedCourseId = sessionStorage.getItem('selectedCourse');
+
+    // Face recognition or other functions...
+    function startRecognition() {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          document.getElementById('video').srcObject = stream;
+          // start face recognition loop...
+        })
+        .catch(error => {
+          console.error('Error accessing camera', error);
+        });
+    }
+
+    function onFaceRecognized(studentId) {
+      fetch('/submit_attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: studentId,
+          course_id: selectedCourseId
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          alert('Attendance marked successfully!');
+        } else {
+          alert('Failed to mark attendance.');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

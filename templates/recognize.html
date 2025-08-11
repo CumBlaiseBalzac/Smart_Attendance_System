@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <title>Auto Recognize Face</title>
   <style>
@@ -9,7 +8,6 @@
       margin: 20px;
       background: #f2f2f2;
     }
-
     .topnav {
       background-color: #2710ba;
       padding: 0px 20px;
@@ -19,18 +17,15 @@
       align-items: center;
       color: #fff;
     }
-
     .topnav .logo {
       font-weight: bold;
       font-size: 18px;
     }
-
     .topnav .nav-links a {
       color: #fff;
       margin-left: 15px;
       text-decoration: none;
     }
-
     .main-container {
       display: flex;
       height: calc(100vh - 60px);
@@ -38,33 +33,27 @@
       align-items: center;
       justify-content: center;
     }
-
     .loading-text {
       position: absolute;
       font-size: 24px;
       color: #333;
       margin-bottom: 30px;
-      /* 👈 adds spacing before video shows */
-
     }
-
     .video-container {
       position: relative;
       margin-top: 50px;
       width: 100%;
       max-width: 550px;
       display: none;
-      /* Initially hidden */
     }
-
     #video {
-  width: 100%;
-  height: auto;
-  border-radius: 10px;
-  display: block;
-  border: 4px solid #007BFF; /* Blue border for a nicer frame */
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Optional shadow for better appearance */
-}
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      display: block;
+      border: 4px solid #007BFF;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
     #overlay {
       position: absolute;
       top: 0;
@@ -74,12 +63,10 @@
       height: 100%;
       border-radius: 10px;
     }
-
     .right {
       margin-top: 20px;
       text-align: center;
     }
-
     #result {
       margin-top: 15px;
       font-size: 18px;
@@ -87,7 +74,6 @@
     }
   </style>
 </head>
-
 <body>
   <div class="topnav">
     <div class="logo">Data Link SAS 🤖</div>
@@ -95,10 +81,10 @@
       <a href="{{url_for('dashboard')}}">Dashboard</a>
       <a href="/register">Register</a>
       <a href="/train">Train</a>
-      <a href="/recognize">Recognize</a>
+      <a href="/select_course">Recognize</a>
       <a href="/todays_attendance">Today's Schedule</a>
       <a href="/all_schedules">All Schedules</a>
-      <a href="{{url_for('create_user')}}">Add User</a>
+      <a href="{{url_for('create_user')}}">Admin</a>
       <a href="/logout">Logout</a>
     </div>
   </div>
@@ -118,95 +104,99 @@
   <script defer src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
   <script>
-    window.onload = async function () {
-      const video = document.getElementById('video');
-      const overlay = document.getElementById('overlay');
-      const result = document.getElementById('result');
-      const loadingText = document.getElementById('loadingText');
-      const videoContainer = document.querySelector('.video-container');
-      let labeledDescriptors = [];
-      let faceMatcher;
+window.onload = async function () {
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const result = document.getElementById('result');
+    const loadingText = document.getElementById('loadingText');
+    const videoContainer = document.querySelector('.video-container');
 
-      // Load Models
-      await Promise.all([
+    const urlParams = new URLSearchParams(window.location.search);
+    const courseId = urlParams.get('course_id');
+
+    let labeledDescriptors = [];
+    let faceMatcher;
+
+    // Load Models
+    await Promise.all([
         faceapi.nets.faceRecognitionNet.loadFromUri('/static/models'),
         faceapi.nets.faceLandmark68Net.loadFromUri('/static/models'),
         faceapi.nets.ssdMobilenetv1.loadFromUri('/static/models')
-      ]);
+    ]);
 
-      startVideo();
-      await loadLabeledData();
+    startVideo();
+    await loadLabeledData();
 
-      function startVideo() {
+    function startVideo() {
         navigator.mediaDevices.getUserMedia({ video: {} })
-          .then(stream => {
-            video.srcObject = stream;
-            // Hide loading text and show video when ready
-            loadingText.style.display = 'none';
-            videoContainer.style.display = 'block';
-            result.textContent = "Models loaded and ready.";
+            .then(stream => {
+                video.srcObject = stream;
+                loadingText.style.display = 'none';
+                videoContainer.style.display = 'block';
+            })
+            .catch(err => {
+                loadingText.textContent = "Camera error: " + err.message;
+            });
+    }
 
-          })
-          .catch(err => {
-            loadingText.textContent = "Camera access error: " + err.message;
-            result.textContent = "Camera access error: " + err.message;
-          });
-      }
-
-      async function loadLabeledData() {
-        try {
-          const response = await fetch('/api/known_faces');
-          const data = await response.json();
-
-          labeledDescriptors = data.map(person => {
+    async function loadLabeledData() {
+        const response = await fetch('/api/known_faces');
+        const data = await response.json();
+        labeledDescriptors = data.map(person => {
             const descriptors = person.descriptors.map(d => new Float32Array(d));
             return new faceapi.LabeledFaceDescriptors(person.label, descriptors);
-          });
+        });
+        faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+    }
 
-          faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
-        } catch (error) {
-          result.textContent = "Error loading face data: " + error.message;
-        }
-      }
-
-      video.addEventListener('play', () => {
+    video.addEventListener('play', () => {
         overlay.width = video.videoWidth;
         overlay.height = video.videoHeight;
         const ctx = overlay.getContext('2d');
 
         setInterval(async () => {
-          const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
-          ctx.clearRect(0, 0, overlay.width, overlay.height);
+            const detections = await faceapi.detectAllFaces(video)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
 
-          detections.forEach(detection => {
-            const match = faceMatcher.findBestMatch(detection.descriptor);
-            const box = detection.detection.box;
-            const text = match.toString();
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-            // Draw
-            ctx.strokeStyle = "#00ff00";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(box.x, box.y, box.width, box.height);
-            ctx.font = "16px Arial";
-            ctx.fillStyle = "red";
-            ctx.fillText(text, box.x, box.y - 14);
+            detections.forEach(detection => {
+                const match = faceMatcher.findBestMatch(detection.descriptor);
+                const box = detection.detection.box;
+                const text = match.toString();
 
-            // Backend call
-            sendAttendance(match.label);
-          });
+                // Draw
+                ctx.strokeStyle = "#00ff00";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+                ctx.font = "16px Arial";
+                ctx.fillStyle = "red";
+                ctx.fillText(text, box.x, box.y - 14);
+
+                // Send attendance with course ID
+                sendAttendance(match.label);
+            });
         }, 1500);
-      });
+    });
 
-      function sendAttendance(name) {
+    function sendAttendance(name) {
         if (name === 'unknown') return;
-        fetch('/api/mark_attendance', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name })
-        });
-      }
-    };
-  </script>
-</body>
 
+        fetch('/api/mark_attendance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                course_id: courseId
+            })
+        })
+        .then(res => res.json())
+        .then(data => console.log("Backend response:", data))
+        .catch(err => console.error(err));
+    }
+};
+</script>
+
+</body>
 </html>

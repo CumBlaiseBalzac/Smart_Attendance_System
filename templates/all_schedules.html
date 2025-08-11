@@ -79,10 +79,10 @@
       <a href="{{url_for('dashboard')}}">Dashboard</a>
       <a href="/register">Register</a>
       <a href="/train">Train</a>
-      <a href="/recognize">Recognize</a>
+      <a href="/select_course">Recognize</a>
       <a href="/todays_attendance">Today's Schedule</a>
       <a href="/all_schedules">All Schedules</a>
-      <a href="{{url_for('create_user')}}">Add User</a>
+      <a href="{{url_for('create_user')}}">Admin</a>
 
       <a href="/logout">Logout</a>
     </div>
@@ -203,6 +203,27 @@ function loadAllAttendance() {
 
         // Load data when the page loads
         loadAllAttendance(); 
+
+        function filterTable() {
+    let input = document.getElementById("searchInput").value.toLowerCase();
+    let table = document.getElementById("attendanceTable");
+    let tr = table.getElementsByTagName("tr");
+
+    // Start from i = 1 to skip the table header
+    for (let i = 1; i < tr.length; i++) {
+        let tds = tr[i].getElementsByTagName("td");
+        let rowMatch = false;
+
+        for (let j = 0; j < tds.length - 1; j++) { // exclude the "Action" column
+            if (tds[j] && tds[j].innerText.toLowerCase().includes(input)) {
+                rowMatch = true;
+                break;
+            }
+        }
+
+        tr[i].style.display = rowMatch ? "" : "none";
+    }
+}
 
     </script>
 </body>

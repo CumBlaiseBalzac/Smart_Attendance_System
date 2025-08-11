@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, send_from_directory
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 import csv
 from io import StringIO
 import os
@@ -23,23 +23,8 @@ DB_NAME = 'attendance.db'
 def initialize_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS attendance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            course TEXT NOT NULL,
-            status TEXT NOT NULL,
-            date TEXT NOT NULL,
-            time TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
-        )
-    ''')
+
+    # Create students table with all columns, including last_attendance
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS students (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,9 +35,20 @@ def initialize_db():
             level TEXT NOT NULL,
             section TEXT NOT NULL,
             captures INTEGER DEFAULT 0,
-            date_registered TEXT NOT NULL
+            date_registered TEXT NOT NULL,
+            last_attendance TEXT
         )
     ''')
+
+    # Create other tables
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+    ''')
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS schedules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,27 +57,48 @@ def initialize_db():
             time TEXT NOT NULL
         )
     ''')
+    cursor.execute('''
+CREATE TABLE IF NOT EXISTS attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER,
+    course_id INTEGER,
+    date TEXT,
+    time TEXT,
+    status TEXT DEFAULT 'Present',
+    FOREIGN KEY(student_id) REFERENCES students(id)
+)
+''')
+
     conn.commit()
     conn.close()
 
-def mark_present(name, date, time):
+def mark_present(name, course_id, date, time):
     conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT course FROM students WHERE name = ?", (name,))
-    result = cursor.fetchone()
-    if result:
-        course = result[0]
-        cursor.execute("""
-            SELECT * FROM attendance WHERE name = ? AND date = ?
-        """, (name, date))
-        already_marked = cursor.fetchone()
-        if not already_marked:
-            cursor.execute("""
-                INSERT INTO attendance (name, course, status, date, time)
-                VALUES (?, ?, ?, ?, ?)
-            """, (name, course, 'Present', date, time))
-            conn.commit()
+    c = conn.cursor()
+    # Get student ID
+    c.execute("SELECT id FROM students WHERE name = ?", (name,))
+    result = c.fetchone()
+    if not result:
+        conn.close()
+        return
+    student_id = result[0]
+
+    # Check for duplicate attendance for same student, course, date
+    c.execute("""
+        SELECT 1 FROM attendance WHERE student_id = ? AND course_id = ? AND date = ?
+    """, (student_id, course_id, date))
+    if c.fetchone():
+        conn.close()
+        return
+
+    # Insert attendance record
+    c.execute("""
+        INSERT INTO attendance (student_id, course_id, date, time, status)
+        VALUES (?, ?, ?, ?, ?)
+    """, (student_id, course_id, date, time, 'Present'))
+    conn.commit()
     conn.close()
+
 
 @app.route('/')
 def home():
@@ -160,6 +177,10 @@ def all_schedules():
 @app.route('/todays_attendance')
 def todays_attendance():
     return render_template('todays_attendance.html')
+
+@app.route('/select_course')
+def select_course():
+    return render_template('select_course.html')
 
 @app.route('/api/all_attendance')
 def api_all_attendance():
@@ -395,7 +416,6 @@ def dashboard_cards():
     c.execute("SELECT COUNT(DISTINCT course) FROM students")
     total_courses = c.fetchone()[0]
 
-    # ✅ Fixed: Count today's attendance from attendance table, not schedules
     today = datetime.now().strftime('%Y-%m-%d')
     c.execute("SELECT COUNT(*) FROM attendance WHERE date = ?", (today,))
     total_schedules = c.fetchone()[0]
@@ -408,28 +428,11 @@ def dashboard_cards():
     return jsonify({
         'totalUsers': total_users,
         'totalCourses': total_courses,
-        'totalSchedules': total_schedules,  # Now correctly shows today's attendance
-        'attendanceRecords': attendance_records
+        'totalSchedules': total_schedules,  
+        'attendanceRecords': attendance_records,
+        
     })
 
-# @app.route('/api/known_faces')
-# def get_known_faces():
-#     enc_path = os.path.join(os.path.dirname(__file__), 'encodings.pkl')
-#     if not os.path.exists(enc_path):
-#         return jsonify({'error': 'encodings.pkl not found'}), 500
-
-#     with open(enc_path, 'rb') as f:
-#         encodings = pickle.load(f)
-
-#     # Format the data
-#     data = []
-#     for label, descriptors in encodings.items():
-#         data.append({
-#             'label': label,
-#             'descriptors': [enc.tolist() for enc in descriptors]
-#         })
-
-#     return jsonify(data)
 
 @app.route('/api/known_faces')
 def get_known_faces():
@@ -461,15 +464,47 @@ def get_known_faces():
     return jsonify(result)
 
 
-@app.route('/api/mark_attendance', methods=['POST'])
+# @app.route('/api/mark_attendance', methods=['POST'])
 def mark_attendance():
     name = request.json.get('name')
     now = datetime.now()
     mark_present(name, now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'))
     return jsonify({'status': 'success'})
-dataset_dir = 'captured_faces'  
+dataset_dir = 'captured_faces'
+
+@app.route('/api/mark_attendance', methods=['POST'])
+def mark_present_for_course(student_name, course_id, date, time):
+    conn = sqlite3.connect('attendance.db')
+    c = conn.cursor()
+
+    # Get student_id
+    c.execute("SELECT id FROM students WHERE name = ?", (student_name,))
+    student = c.fetchone()
+    if not student:
+        conn.close()
+        return
+    student_id = student[0]
+
+    # Check if already marked for this course & date
+    c.execute("""
+        SELECT 1 FROM attendance
+        WHERE student_id = ? AND course_id = ? AND date = ?
+    """, (student_id, course_id, date))
+    if c.fetchone():
+        conn.close()
+        return
+
+    # Insert only for the selected course
+    c.execute("""
+        INSERT INTO attendance (student_id, course_id, date, time, status)
+        VALUES (?, ?, ?, ?, ?)
+    """, (student_id, course_id, date, time, "Present"))
+
+    conn.commit()
+    conn.close()
 
 
+dataset_dir = 'captured_faces'
 @app.route('/captured_faces')
 def captured_faces():
     images = []
@@ -617,48 +652,44 @@ def get_absent_students():
     return jsonify(data)
 
 
-@app.route('/api/today_attendance')
-def get_today_attendance():
-    selected_date = request.args.get('date')
-    selected_course = request.args.get('course')
+@app.route("/api/today_attendance")
+def today_attendance():
+    date_filter = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    course_filter = request.args.get("course")
 
-    if not selected_date:
-        selected_date = datetime.now().strftime('%Y-%m-%d')
+    conn = sqlite3.connect("attendance.db")
+    c = conn.cursor()
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    if course_filter:
+        c.execute("""
+            SELECT a.name, a.course, s.level, s.section, a.time, a.status
+            FROM attendance a
+            LEFT JOIN students s ON a.name = s.name
+            WHERE a.date = ? AND a.course = ?
+        """, (date_filter, course_filter))
+    else:
+        c.execute("""
+            SELECT a.name, a.course, s.level, s.section, a.time, a.status
+            FROM attendance a
+            LEFT JOIN students s ON a.name = s.name
+            WHERE a.date = ?
+        """, (date_filter,))
 
-    # Base query
-    query = '''
-        SELECT s.name, s.course, s.level, s.section, a.time, a.status
-        FROM students s
-        JOIN attendance a ON s.name = a.name
-        WHERE a.date = ?
-    '''
-    params = [selected_date]
-
-    if selected_course:
-        query += ' AND s.course = ?'
-        params.append(selected_course)
-
-    cursor.execute(query, params)
-    records = cursor.fetchall()
+    rows = c.fetchall()
     conn.close()
 
-    attendance = []
-    for rec in records:
-        attendance.append({
-            'name': rec[0],
-            'course': rec[1],
-            'level': rec[2],
-            'section': rec[3],
-            'time': rec[4],
-            'status': rec[5]
-        })
-
-    return jsonify({'attendance': attendance})
-
-
+    attendance_list = [
+        {
+            "name": r[0],
+            "course": r[1],
+            "level": r[2] if r[2] else "",
+            "section": r[3] if r[3] else "",
+            "time": r[4],
+            "status": r[5]
+        }
+        for r in rows
+    ]
+    return jsonify({"attendance": attendance_list})
 
 @app.route('/download-today-pdf')
 def download_today_pdf():
@@ -720,17 +751,42 @@ def get_courses():
     rows = cursor.fetchall()
     conn.close()
 
-    courses = [row[0] for row in rows if row[0]]  # Skip any null/empty course
+    courses = [row[0] for row in rows if row[0]]
     return jsonify({'courses': courses})
 
-@app.route('/api/delete-attendance/<int:attendance_id>', methods=['DELETE'])
-def delete_attendance(attendance_id):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM attendance WHERE id = ?", (attendance_id,))
+@app.route('/submit_attendance', methods=['POST'])
+def submit_attendance():
+    data = request.get_json()
+    student_id = data.get('student_id')
+    course_id = data.get('course_id')
+
+    # Connect to database
+    conn = sqlite3.connect('your_database.db')
+    c = conn.cursor()
+
+    # 1. Check if student is registered for the course
+    c.execute("""
+        SELECT 1 FROM registrations 
+        WHERE student_id = ? AND course_id = ?
+    """, (student_id, course_id))
+    registration = c.fetchone()
+
+    if not registration:
+        conn.close()
+        return jsonify({"status": "error", "message": "Not registered for this course"}), 403
+
+    # 2. Insert attendance record
+    today = datetime.now().date()
+    now_time = datetime.now().time().strftime("%H:%M:%S")
+
+    c.execute("""
+        INSERT INTO attendance (student_id, course_id, date, time)
+        VALUES (?, ?, ?, ?)
+    """, (student_id, course_id, today, now_time))
     conn.commit()
     conn.close()
-    return jsonify({'message': 'Attendance record deleted'}), 200
+
+    return jsonify({"status": "success"})
 
 if __name__ == '__main__':
     initialize_db()
