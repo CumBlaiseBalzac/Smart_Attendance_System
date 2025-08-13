@@ -82,8 +82,7 @@
       <a href="/register">Register</a>
       <a href="/train">Train</a>
       <a href="/select_course">Recognize</a>
-      <a href="/todays_attendance">Today's Schedule</a>
-      <a href="/all_schedules">All Schedules</a>
+      <a href="/all_schedules">Attendance</a>
       <a href="{{url_for('create_user')}}">Admin</a>
       <a href="/logout">Logout</a>
     </div>
@@ -97,6 +96,7 @@
     </div>
     <div class="right">
       <h2>Recognition Log</h2>
+      <p id="course-info" style="font-size: 16px; color: #2710ba; margin-bottom: 10px;"></p>
       <p id="result"></p>
     </div>
   </div>
@@ -112,7 +112,18 @@ window.onload = async function () {
     const videoContainer = document.querySelector('.video-container');
 
     const urlParams = new URLSearchParams(window.location.search);
-    const courseId = urlParams.get('course_id');
+    const courseName = urlParams.get('course_name') || sessionStorage.getItem('selectedCourse');
+    
+    if (!courseName) {
+        alert('No course selected. Please go back and select a course.');
+        window.location.href = '/select_course';
+        return;
+    }
+    
+    console.log('Selected course:', courseName);
+    
+    // Display course name
+    document.getElementById('course-info').textContent = `Taking attendance for: ${courseName}`;
 
     let labeledDescriptors = [];
     let faceMatcher;
@@ -177,23 +188,85 @@ window.onload = async function () {
                 // Send attendance with course ID
                 sendAttendance(match.label);
             });
-        }, 1500);
+        }, 5000);
     });
 
+    let lastRecognizedName = null;
+    let lastRecognitionTime = 0;
+    let processedStudentsToday = new Set(); // Track students processed in this session
+    
     function sendAttendance(name) {
         if (name === 'unknown') return;
+        
+        const currentTime = Date.now();
+        const studentKey = `${name}_${courseName}_${new Date().toDateString()}`;
+        
+        // Check if student was already processed today in this session
+        if (processedStudentsToday.has(studentKey)) {
+            result.textContent = `🔄 ${name} already marked present today`;
+            result.style.color = 'orange';
+            return;
+        }
+        
+        // Prevent rapid duplicate submissions (within 30 seconds)
+        if (lastRecognizedName === name && (currentTime - lastRecognitionTime) < 30000) {
+            const remainingTime = Math.ceil((30000 - (currentTime - lastRecognitionTime)) / 1000);
+            result.textContent = `⏳ Cooldown active for ${name} (${remainingTime}s remaining)`;
+            result.style.color = 'orange';
+            return;
+        }
+        
+        lastRecognizedName = name;
+        lastRecognitionTime = currentTime;
+        
+        console.log('Marking attendance for:', name, 'in course:', courseName);
+        result.textContent = `📝 Marking attendance for ${name}...`;
+        result.style.color = 'blue';
 
         fetch('/api/mark_attendance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 name: name,
-                course_id: courseId
+                course_name: courseName
             })
         })
         .then(res => res.json())
-        .then(data => console.log("Backend response:", data))
-        .catch(err => console.error(err));
+        .then(data => {
+            console.log("Backend response:", data);
+            if (data.status === 'success') {
+                processedStudentsToday.add(studentKey); // Mark as processed
+                result.textContent = `✅ Attendance marked for ${name} in ${courseName}`;
+                result.style.color = 'green';
+                
+                // Show success for 3 seconds, then clear
+                setTimeout(() => {
+                    result.textContent = '';
+                }, 3000);
+            } else {
+                result.textContent = `❌ ${data.message || 'Failed to mark attendance'}`;
+                result.style.color = 'red';
+                
+                // If already marked, add to processed list to prevent future attempts
+                if (data.message && data.message.includes('already marked')) {
+                    processedStudentsToday.add(studentKey);
+                }
+                
+                // Show error for 5 seconds, then clear
+                setTimeout(() => {
+                    result.textContent = '';
+                }, 5000);
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            result.textContent = `❌ Network error: ${err.message}`;
+            result.style.color = 'red';
+            
+            setTimeout(() => {
+                result.textContent = '';
+            }, 5000);
+        });
     }
 };
 </script>

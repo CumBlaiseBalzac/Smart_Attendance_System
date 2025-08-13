@@ -116,12 +116,13 @@
       <th>Course</th>
       <th>Level</th>
       <th>Section</th>
+      <th>Date</th>
       <th>Time</th>
       <th>Status</th>
     </tr>
   </thead>
   <tbody id="attendanceBody">
-    <tr><td colspan="6" style="text-align:center;">Loading...</td></tr>
+    <tr><td colspan="7" style="text-align:center;">Loading...</td></tr>
   </tbody>
 </table>
 
@@ -145,7 +146,7 @@
     tbody.innerHTML = "";
 
     if (data.attendance.length === 0) {
-      tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>No attendance data for selected filters</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>No attendance data for selected filters</td></tr>";
       return;
     }
 
@@ -156,6 +157,7 @@
         <td>${record.course}</td>
         <td>${record.level}</td>
         <td>${record.section}</td>
+        <td>${record.date}</td>
         <td>${record.time}</td>
         <td>${record.status}</td>
       `;
@@ -163,7 +165,7 @@
     });
   } catch (err) {
     console.error(err);
-    document.getElementById("attendanceBody").innerHTML = "<tr><td colspan='6'>Error loading data</td></tr>";
+    document.getElementById("attendanceBody").innerHTML = "<tr><td colspan='7'>Error loading data</td></tr>";
   }
 }
 
@@ -209,17 +211,20 @@ async function loadCourses() {
     const data = await res.json();
 
     const select = document.getElementById('courseFilter');
+
+    // Optional: clear previous options if any
+    select.innerHTML = '<option value="">-- Filter by Course --</option>';
+
     data.courses.forEach(course => {
       const option = document.createElement('option');
-      option.value = course;
-      option.textContent = course;
+      option.value = course.id; // use course id for filtering
+      option.textContent = course.name; // display course name
       select.appendChild(option);
     });
   } catch (err) {
     console.error('Failed to load courses:', err);
   }
 }
-
 </script>
 </body>
 </html>

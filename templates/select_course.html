@@ -50,8 +50,7 @@
       <a href="/register">Register</a>
       <a href="/train">Train</a>
       <a href="/select_course">Recognize</a>
-      <a href="/todays_attendance">Today's Schedule</a>
-      <a href="/all_schedules">All Schedules</a>
+      <a href="/all_schedules">Attendance</a>
       <a href="{{url_for('create_user')}}">Admin</a>
       <a href="/logout">Logout</a>
     </div>
@@ -65,72 +64,66 @@
     <button type="button" onclick="startAttendance()">Start Attendance</button>
   </form>
 </div>
-  <script>
-    // Wait until DOM is fully loaded
-    document.addEventListener('DOMContentLoaded', () => {
-      // Fetch courses and populate the dropdown
-      fetch('/api/courses')
-        .then(response => response.json())
-        .then(data => {
-          const courses = data.courses; 
-          const select = document.getElementById('courseDropdown');
-          select.innerHTML = ''; 
+<script>
+  // Fetch courses on DOM load
+document.addEventListener('DOMContentLoaded', () => {
+  fetch('/api/courses')
+    .then(response => response.json())
+    .then(data => {
+      const courses = data.courses; 
+      const select = document.getElementById('courseDropdown');
+      select.innerHTML = '<option value="">Select a course...</option>'; 
 
-          courses.forEach(course => {
-            const option = document.createElement('option');
-            option.value = course;
-            option.textContent = course;
-            select.appendChild(option);
-          });
-        })
-        .catch(error => {
-          console.error('Error fetching courses:', error);
-        });
+  courses.forEach(course => {
+  const option = document.createElement('option');
+  option.value = course.name; // Send course name
+  option.textContent = course.name; // Display course name
+  select.appendChild(option);
+});
+    })
+    .catch(error => {
+      console.error('Error fetching courses:', error);
     });
+});
 
-    // Use the same ID as your dropdown
-    function startAttendance() {
-      const courseId = document.getElementById('courseDropdown').value;
+// Make sure startAttendance() is globally defined
+function startAttendance() {
+  const select = document.getElementById('courseDropdown');
+  const selectedCourseName = select.value; // value is course name
+  
+  if (!selectedCourseName) {
+    alert('Please select a course first!');
+    return;
+  }
+  
+  // Store in sessionStorage and redirect with URL parameter
+  sessionStorage.setItem('selectedCourse', selectedCourseName);
+  window.location.href = "{{ url_for('recognize') }}?course_name=" + encodeURIComponent(selectedCourseName);
+}
 
-      // Save selected course in sessionStorage
-      sessionStorage.setItem('selectedCourse', courseId);
-
-      // Redirect to recognize page or start recognition
-      window.location.href = "{{ url_for('recognize') }}";    }
-
-    // Example: get selected course later (when needed)
-    const selectedCourseId = sessionStorage.getItem('selectedCourse');
-
-    // Face recognition or other functions...
-    function startRecognition() {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-          document.getElementById('video').srcObject = stream;
-          // start face recognition loop...
-        })
-        .catch(error => {
-          console.error('Error accessing camera', error);
-        });
+function onFaceRecognized(studentId) {
+  console.log('Reporting attendance for:', {
+    student_id: studentId,
+    course: window.selectedCourseName
+  });
+  
+  fetch('/submit_attendance', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      student_id: studentId,
+      course: window.selectedCourseName
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      alert('Attendance marked successfully!');
+    } else {
+      alert('Failed to mark attendance.');
     }
-
-    function onFaceRecognized(studentId) {
-      fetch('/submit_attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student_id: studentId,
-          course_id: selectedCourseId
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert('Attendance marked successfully!');
-        } else {
-          alert('Failed to mark attendance.');
-        }
-      });
-    }
+  });
+}
   </script>
 </body>
 </html>

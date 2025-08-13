@@ -265,8 +265,7 @@
       <a href="{{url_for('register')}}">Register</a>
       <a href="/train">Train</a>
       <a href="/select_course">Recognize</a>
-      <a href="/todays_attendance">Today's Schedule</a>
-      <a href="/all_schedules">All Schedules</a>
+      <a href="/all_schedules">Attendance</a>
       <a href="{{url_for('create_user')}}">Admin</a>
       <a href="/logout">Logout</a>
     </div>
@@ -305,8 +304,8 @@
               <!-- Right column of form -->
               <div class="column">
                 <div class="field-group">
-                  <label for="course">Course</label>
-                  <input type="text" id="course" name="course" placeholder="Enter course" required />
+                  <label for="course_code">Course</label>
+                  <input type="text" id="course_code" name="course_code" placeholder="Enter course Code" required />
                 </div>
                 <div class="field-group">
                   <label for="level">Level</label>
@@ -376,51 +375,62 @@
     }
 
     function submitRegistration() {
-      const btn = document.getElementById('floatingRegisterBtn');
-      btn.setAttribute('aria-busy', 'true');
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+  const btn = document.getElementById('floatingRegisterBtn');
+  btn.setAttribute('aria-busy', 'true');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
 
-      const capturedImage = localStorage.getItem("capturedImage");
-      if (!capturedImage) {
-        alert("Please capture the student's face before registering.");
-        resetButton();
-        return;
-      }
+  const capturedImage = localStorage.getItem("capturedImage");
+  if (!capturedImage) {
+    alert("Please capture the student's face before registering.");
+    resetButton();
+    return;
+  }
 
-      const name = document.getElementById("name").value.trim();
-      const email = document.getElementById("email").value.trim();
-      const phone = document.getElementById("phone").value.trim();
-      const course = document.getElementById("course").value.trim();
-      const level = document.getElementById("level").value.trim();
-      const section = document.getElementById("section").value.trim();
+  const name = document.getElementById("name").value.trim();
+const email = document.getElementById("email").value.trim();
+const phone = document.getElementById("phone").value.trim();
+const course_code = document.getElementById("course_code").value.trim();
+const level = document.getElementById("level").value.trim();
+const section = document.getElementById("section").value.trim();
 
-      if (!name || !email || !phone || !course || !level || !section || !validateForm()) {
-        alert("Please fill all fields correctly before submitting.");
-        resetButton();
-        return;
-      }
+const data = { 
+    name, 
+    email, 
+    phone, 
+    course: course_code,  // send this as course_name to Flask
+    course_code, 
+    level, 
+    section, 
+    image: capturedImage 
+};
 
-      const data = { name, email, phone, course, level, section, image: capturedImage };
+  // Basic validation
+  if (!name || !email || !phone || !course_code || !level || !section) {
+    alert("Please fill all fields correctly before submitting.");
+    resetButton();
+    return;
+  }
 
-      fetch('/api/save-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      })
-      .then(resp => resp.json())
-      .then(result => {
-        alert(result.message);
-        document.getElementById("registerForm").reset();
-        localStorage.removeItem("capturedImage");
-      })
-      .catch(error => {
-        alert("Error registering student: " + error);
-      })
-      .finally(() => {
-        resetButton();
-      });
-    }
-
+  fetch('/api/save-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  .then(resp => resp.json())
+  .then(result => {
+    console.log("Server response:", result);
+    alert(result.message);
+    document.getElementById("registerForm").reset();
+    localStorage.removeItem("capturedImage");
+  })
+  .catch(error => {
+    console.error("Error:", error);
+    alert("Error registering student. Check console for details.");
+  })
+  .finally(() => {
+    resetButton();
+  });
+}
     function resetButton() {
       const btn = document.getElementById('floatingRegisterBtn');
       btn.setAttribute('aria-busy', 'false');

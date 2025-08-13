@@ -165,6 +165,94 @@
   table th {
     background-color: #d5d6da;
   }
+  
+  /* Floating Action Button Styles */
+  .fab {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    text-decoration: none;
+    color: white;
+    font-size: 24px;
+    z-index: 1000;
+    border: none;
+  }
+  
+  .fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 25px rgba(102, 126, 234, 0.6);
+    color: white;
+    text-decoration: none;
+  }
+  
+  .fab:active {
+    transform: scale(0.95);
+  }
+  
+  .fab .fab-icon {
+    transition: transform 0.3s ease;
+  }
+  
+  .fab:hover .fab-icon {
+    transform: rotate(360deg);
+  }
+  
+  .fab-tooltip {
+    position: absolute;
+    right: 70px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  
+  .fab:hover .fab-tooltip {
+    opacity: 1;
+  }
+  
+  .fab-tooltip:after {
+    content: '';
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 5px solid transparent;
+    border-left-color: rgba(0, 0, 0, 0.8);
+  }
+  
+  /* Pulse animation */
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    50% {
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.7), 0 0 0 10px rgba(102, 126, 234, 0.1);
+    }
+    100% {
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+  }
+  
+  .fab.pulse {
+    animation: pulse 2s infinite;
+  }
 </style>
 </head>
 <body>
@@ -175,8 +263,7 @@
       <a href="{{url_for('register')}}">Register</a>
       <a href="/train">Train</a>
       <a href="/select_course">Recognize</a>
-      <a href="/todays_attendance">Today's Schedule</a>
-      <a href="/all_schedules">All Schedules</a>
+      <a href="/all_schedules">Attendance</a>
       <a href="{{url_for('create_user')}}">Admin</a>
       <a href="/logout">Logout</a>
     </div>
@@ -216,6 +303,12 @@
     </thead>
     <tbody></tbody>
   </table>
+
+  <!-- Floating Action Button for Bulk Attendance -->
+  <a href="/bulk_attendance" class="fab" title="Bulk Attendance">
+    <div class="fab-tooltip">Bulk Attendance</div>
+    <i class="fab-icon">👥</i>
+  </a>
 
   <script>
     async function loadDashboardCards() {
@@ -429,6 +522,15 @@
       loadDashboardCards();
       loadRegisteredStudents();
       loadPresentAndAbsentLists();
+      
+      // Add pulse effect to FAB for 5 seconds on page load
+      const fab = document.querySelector('.fab');
+      if (fab) {
+        fab.classList.add('pulse');
+        setTimeout(() => {
+          fab.classList.remove('pulse');
+        }, 5000);
+      }
     });
   </script>
 </body>

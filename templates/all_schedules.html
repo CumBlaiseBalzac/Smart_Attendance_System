@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>All Attendance Schedules</title>
+    <title>Attendance Records</title>
     <style>
     body {
       font-family: Arial, sans-serif;
@@ -80,14 +80,13 @@
       <a href="/register">Register</a>
       <a href="/train">Train</a>
       <a href="/select_course">Recognize</a>
-      <a href="/todays_attendance">Today's Schedule</a>
-      <a href="/all_schedules">All Schedules</a>
+      <a href="/all_schedules">Attendance</a>
       <a href="{{url_for('create_user')}}">Admin</a>
-
       <a href="/logout">Logout</a>
     </div>
   </div>
-    <h2>All Attendance Records</h2>
+    <h2>Course Attendance Records</h2>
+    <h3 style="background-color: rgb(54, 51, 50); text-align: center; color: #f8f4f4; padding: 6px; border-radius: 30px;">Note!!! &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;You can search for a course or a student and download a corresponding attendance</h3>
 
     <input type="text" id="searchInput" placeholder="Search by name, course or date..." onkeyup="filterTable()">
 
@@ -98,7 +97,7 @@
 
     <table id="attendanceTable">
         <thead>
-            <tr>
+      <tr>
       <th>Name</th>
       <th>Course</th>
       <th>Status</th>
@@ -177,7 +176,7 @@ function loadAllAttendance() {
 
   const newWin = window.open('', '', 'width=900,height=700');
 
-  newWin.document.write('<html><head><title>All Time Attendance</title>');
+  newWin.document.write('<html><head><title>Course Attendance</title>');
   // Correct CSS with border-collapse on table, and padding & borders on th/td
   newWin.document.write(`
     <style>
@@ -194,7 +193,7 @@ function loadAllAttendance() {
     </style>
   `);
   newWin.document.write('</head><body>');
-  newWin.document.write('<h3>Attendance Records of All Time</h3>');
+  newWin.document.write('<h3>Attendance Records For the Selected Course</h3>');
   newWin.document.write(table.outerHTML);
   newWin.document.write('</body></html>');
   newWin.document.close();
