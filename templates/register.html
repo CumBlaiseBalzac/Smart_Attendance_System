@@ -255,6 +255,16 @@
   .topnav .nav-links a:hover {
     text-decoration: underline;
   }
+
+  /* Multi-select component */
+  .multi-select { position: relative; }
+  .multi-select-toggle { display:flex; justify-content: space-between; align-items:center; width:100%; padding:12px; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer; }
+  .multi-select-toggle:focus { outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,.2); border-color:#3b82f6; }
+  .multi-select-menu { position:absolute; top: calc(100% + 4px); left:0; right:0; background:#fff; border:1px solid #d1d5db; border-radius:8px; box-shadow: 0 8px 24px rgba(0,0,0,.08); padding:8px; max-height:260px; overflow:auto; display:none; z-index:1000; }
+  .multi-select.open .multi-select-menu { display:block; }
+  .multi-select-search { width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; margin-bottom:8px; }
+  .multi-select-options label { display:flex; align-items:center; gap:8px; padding:6px 4px; cursor:pointer; }
+  .multi-select-options label:hover { background:#f3f4f6; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -304,8 +314,25 @@
               <!-- Right column of form -->
               <div class="column">
                 <div class="field-group">
-                  <label for="course_code">Course</label>
-                  <input type="text" id="course_code" name="course_code" placeholder="Enter course Code" required />
+                  <label for="course_code">Course Code (optional)</label>
+                  <input type="text" id="course_code" name="course_code" placeholder="Enter course code (optional)" />
+                </div>
+                <div class="field-group">
+                  <label>Courses (select one or more)</label>
+                  <div class="multi-select" id="courseMultiSelect">
+                    <button type="button" class="multi-select-toggle" id="courseDropdownToggle" aria-haspopup="listbox" aria-expanded="false">
+                      <span id="courseDropdownLabel">Select courses...</span>
+                      <i class="fas fa-chevron-down" style="margin-left:8px;"></i>
+                    </button>
+                    <div class="multi-select-menu" id="courseDropdownMenu" role="listbox" aria-multiselectable="true">
+                      <input type="text" id="courseSearch" class="multi-select-search" placeholder="Search courses..." oninput="filterCourseOptions()" />
+                      <div id="courseOptions" class="multi-select-options">Loading courses...</div>
+                    </div>
+                  </div>
+                  <div style="margin-top:8px; display:flex; gap:8px; align-items: center;">
+                    <input type="text" id="newCourseName" placeholder="Add new course" style="flex:1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px;" />
+                    <button type="button" class="btn btn-capture" onclick="addCourse()"><i class="fas fa-plus"></i> Add Course</button>
+                  </div>
                 </div>
                 <div class="field-group">
                   <label for="level">Level</label>
@@ -355,6 +382,23 @@
         .catch(err => {
           alert("Error accessing camera: " + err);
         });
+      // Load available courses into the selection list
+      loadCourses();
+
+      // Setup dropdown toggle and outside-click close
+      const wrapper = document.getElementById('courseMultiSelect');
+      const toggle = document.getElementById('courseDropdownToggle');
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = wrapper.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+      document.addEventListener('click', (e) => {
+        if (!wrapper.contains(e.target)) {
+          wrapper.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
     });
 
     function captureFace() {
@@ -387,26 +431,27 @@
   }
 
   const name = document.getElementById("name").value.trim();
-const email = document.getElementById("email").value.trim();
-const phone = document.getElementById("phone").value.trim();
-const course_code = document.getElementById("course_code").value.trim();
-const level = document.getElementById("level").value.trim();
-const section = document.getElementById("section").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const course_code = document.getElementById("course_code").value.trim();
+  const level = document.getElementById("level").value.trim();
+  const section = document.getElementById("section").value.trim();
+  const selectedCourses = getSelectedCourses();
 
-const data = { 
+  const data = { 
     name, 
     email, 
     phone, 
-    course: course_code,  // send this as course_name to Flask
     course_code, 
+    course_names: selectedCourses,
     level, 
     section, 
     image: capturedImage 
-};
+  };
 
-  // Basic validation
-  if (!name || !email || !phone || !course_code || !level || !section) {
-    alert("Please fill all fields correctly before submitting.");
+  // Basic validation: require at least one course, other fields filled (course_code optional)
+  if (!name || !email || !phone || !level || !section || selectedCourses.length === 0) {
+    alert("Please fill all required fields and select at least one course.");
     resetButton();
     return;
   }
@@ -422,6 +467,8 @@ const data = {
     alert(result.message);
     document.getElementById("registerForm").reset();
     localStorage.removeItem("capturedImage");
+    // Reload courses to refresh checkbox state
+    loadCourses();
   })
   .catch(error => {
     console.error("Error:", error);
@@ -430,6 +477,94 @@ const data = {
   .finally(() => {
     resetButton();
   });
+}
+
+function getSelectedCourses() {
+  return Array.from(document.querySelectorAll('#courseOptions input[type="checkbox"]:checked')).map(cb => cb.value);
+}
+
+function updateCourseDropdownLabel() {
+  const selected = getSelectedCourses();
+  const label = document.getElementById('courseDropdownLabel');
+  if (!label) return;
+  if (selected.length === 0) {
+    label.textContent = 'Select courses...';
+  } else if (selected.length <= 2) {
+    label.textContent = selected.join(', ');
+  } else {
+    label.textContent = `${selected.length} courses selected`;
+  }
+}
+
+function filterCourseOptions() {
+  const q = (document.getElementById('courseSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('#courseOptions label').forEach(lbl => {
+    const text = lbl.textContent.toLowerCase();
+    lbl.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+function renderCourses(list) {
+  const container = document.getElementById('courseOptions');
+  if (!container) return;
+  const prev = new Set(getSelectedCourses());
+  if (!list || list.length === 0) {
+    container.innerHTML = '<div>No courses yet. Add one above.</div>';
+    updateCourseDropdownLabel();
+    return;
+  }
+  container.innerHTML = '';
+  list.forEach(c => {
+    const lbl = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = c.name;
+    if (prev.has(c.name)) cb.checked = true;
+    cb.addEventListener('change', updateCourseDropdownLabel);
+    lbl.appendChild(cb);
+    const span = document.createElement('span');
+    span.textContent = ' ' + c.name;
+    lbl.appendChild(span);
+    container.appendChild(lbl);
+  });
+  updateCourseDropdownLabel();
+}
+
+async function loadCourses() {
+  try {
+    const res = await fetch('/api/courses');
+    const data = await res.json();
+    renderCourses(data.courses || []);
+  } catch (e) {
+    console.error('Failed to load courses', e);
+    const container = document.getElementById('courseOptions');
+    if (container) container.innerHTML = '<div style="color:#b91c1c;">Failed to load courses</div>';
+  }
+}
+
+async function addCourse() {
+  const name = document.getElementById('newCourseName').value.trim();
+  if (!name) {
+    alert('Enter a course name first');
+    return;
+  }
+  try {
+    const res = await fetch('/api/courses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(()=>({error:'Unknown error'}));
+      alert('Failed to add course: ' + (j.error || res.statusText));
+      return;
+    }
+    document.getElementById('newCourseName').value = '';
+    await loadCourses();
+  } catch (e) {
+    console.error('Failed to add course', e);
+    alert('Failed to add course');
+  }
 }
     function resetButton() {
       const btn = document.getElementById('floatingRegisterBtn');

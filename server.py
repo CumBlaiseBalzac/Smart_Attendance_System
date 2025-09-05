@@ -75,7 +75,35 @@ CREATE TABLE IF NOT EXISTS attendance (
         name TEXT UNIQUE NOT NULL
     )
     ''')
+
+    # Mapping table for many-to-many relationship between students and courses
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS student_courses (
+        student_id INTEGER NOT NULL,
+        course_id INTEGER NOT NULL,
+        PRIMARY KEY (student_id, course_id),
+        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+    )
+    ''')
     
+    # Backfill courses from legacy students.course values
+    try:
+        cursor.execute('''
+            INSERT OR IGNORE INTO courses (name)
+            SELECT DISTINCT course FROM students
+            WHERE course IS NOT NULL AND TRIM(course) <> ''
+        ''')
+        cursor.execute('''
+            INSERT OR IGNORE INTO student_courses (student_id, course_id)
+            SELECT s.id, c.id
+            FROM students s
+            JOIN courses c ON c.name = s.course
+            WHERE s.course IS NOT NULL AND TRIM(s.course) <> ''
+        ''')
+    except Exception as e:
+        print(f"Backfill mapping failed or not needed: {e}")
+
     # Add unique constraint to prevent duplicate attendance (if it doesn't exist)
     try:
         cursor.execute('''
@@ -155,25 +183,100 @@ def dashboard():
 def dashboard_data():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('SELECT id, name, email, phone, course, course_code, level, section, date_registered FROM students')
-    students = cursor.fetchall()
+    # Aggregate courses per student using the mapping table if present; fallback to students.course
+    cursor.execute('''
+        SELECT s.id,
+               s.name,
+               s.email,
+               s.phone,
+               COALESCE(
+                   (
+                       SELECT GROUP_CONCAT(c.name, ', ')
+                       FROM student_courses sc
+                       JOIN courses c ON c.id = sc.course_id
+                       WHERE sc.student_id = s.id
+                   ), s.course
+               ) AS courses,
+               s.course_code,
+               s.level,
+               s.section,
+               s.date_registered
+        FROM students s
+        GROUP BY s.id
+        ORDER BY s.name
+    ''')
+    rows = cursor.fetchall()
     conn.close()
 
+    # De-duplicate students by email (preferred) or by normalized name, merging courses
+    merged = {}
+    for r in rows:
+        sid, name, email, phone, courses_csv, course_code, level, section, date_registered = r
+        key = (email or '').strip().lower() or (name or '').strip().lower()
+        # Prepare courses set from comma-separated string
+        courses_set = set()
+        if courses_csv:
+            for part in str(courses_csv).split(','):
+                cname = part.strip()
+                if cname:
+                    courses_set.add(cname)
+        if key not in merged:
+            merged[key] = {
+                'id': sid,
+                'fullname': name,
+                'email': email,
+                'phone': phone,
+                'courses': courses_set,
+                'course_code': course_code,
+                'level': level,
+                'section': section,
+                'date_registered': date_registered,
+            }
+        else:
+            m = merged[key]
+            # Keep the smallest id as canonical and use its courses only
+            if sid < m['id']:
+                m['id'] = sid
+                m['courses'] = set(courses_set)
+            # Prefer non-empty values for contact/fields if current is empty
+            if (not m['fullname']) and name:
+                m['fullname'] = name
+            if (not m['email']) and email:
+                m['email'] = email
+            if (not m['phone']) and phone:
+                m['phone'] = phone
+            if (not m['course_code']) and course_code:
+                m['course_code'] = course_code
+            if (not m['level']) and level:
+                m['level'] = level
+            if (not m['section']) and section:
+                m['section'] = section
+            # Keep earliest registration date if both present (ISO yyyy-mm-dd compares lexicographically)
+            if m['date_registered'] and date_registered:
+                m['date_registered'] = min(m['date_registered'], date_registered)
+            elif date_registered:
+                m['date_registered'] = date_registered
+            # IMPORTANT: Do not merge courses from duplicates; display canonical student's set only.
+
+    # Build response list
     data = []
-    for s in students:
+    for m in merged.values():
+        course_str = ', '.join(sorted(m['courses'])) if m['courses'] else ''
         data.append({
-            'id': s[0],
-            'fullname': s[1],
-            'index_number': f"DLIT2025A{s[0]:03}",
-            'email': s[2],
-            'phone': s[3],
-            'course': s[4],
-            'course_code': s[5], 
-            'level': s[6],
-            'section': s[7],
-            'date_registered': s[8]
+            'id': m['id'],
+            'fullname': m['fullname'],
+            'index_number': f"DLIT2025A{m['id']:03}",
+            'email': m['email'],
+            'phone': m['phone'],
+            'course': course_str,
+            'course_code': m['course_code'],
+            'level': m['level'],
+            'section': m['section'],
+            'date_registered': m['date_registered']
         })
 
+    # Sort by name for stable output
+    data.sort(key=lambda x: (x['fullname'] or '').lower())
     return jsonify(data)
 
 @app.route('/register')
@@ -348,37 +451,68 @@ def get_todays_present():
 def save_user():
     data = request.get_json()
 
-    name = data.get('name')
-    email = data.get('email')
-    phone = data.get('phone')
-    course_name = data.get('course')
-    course_code = data.get('course_code')
-    level = data.get('level')
-    section = data.get('section')
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    # Accept an array of course names for multi-course selection, fallback to single 'course'
+    course_names = data.get('course_names') or []
+    single_course = (data.get('course') or '').strip()
+    if single_course and not course_names:
+        course_names = [single_course]
+    course_code = (data.get('course_code') or '').strip()
+    level = (data.get('level') or '').strip()
+    section = (data.get('section') or '').strip()
     date_registered = datetime.now().strftime('%Y-%m-%d')
 
-    if not all([name, email, phone, course_code, level, section]):
-        return jsonify({'status': 'error', 'message': 'Missing required fields'}), 400
+    if not all([name, email, phone, level, section]) or len(course_names) == 0:
+        return jsonify({'status': 'error', 'message': 'Missing required fields or no courses selected'}), 400
 
     try:
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
 
-        # Check if course exists, insert if not
-        c.execute("SELECT id FROM courses WHERE name = ?", (course_name,))
-        course_row = c.fetchone()
-        if course_row:
-            course_id = course_row[0]
+        # Find existing student by email (preferred) or name
+        student_id = None
+        c.execute("SELECT id FROM students WHERE email = ?", (email,))
+        row = c.fetchone()
+        if row:
+            student_id = row[0]
+            # Update existing student info
+            c.execute('''
+                UPDATE students
+                   SET name = ?, phone = ?, level = ?, section = ?
+                 WHERE id = ?
+            ''', (name, phone, level, section, student_id))
         else:
-            c.execute("INSERT INTO courses (name) VALUES (?)", (course_name,))
-            course_id = c.lastrowid
+            c.execute("SELECT id FROM students WHERE name = ?", (name,))
+            row2 = c.fetchone()
+            if row2:
+                student_id = row2[0]
+                c.execute('''
+                    UPDATE students
+                       SET email = ?, phone = ?, level = ?, section = ?
+                     WHERE id = ?
+                ''', (email, phone, level, section, student_id))
+            else:
+                # Insert new student; keep legacy columns course/course_code for compatibility (use first course)
+                first_course = course_names[0] if course_names else ''
+                c.execute('''
+                    INSERT INTO students (name, email, phone, course, course_code, level, section, captures, date_registered)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (name, email, phone, first_course, course_code, level, section, 0, date_registered))
+                student_id = c.lastrowid
 
-        # Insert student
-        c.execute('''
-            INSERT INTO students (name, email, phone, course, course_code, level, section, captures, date_registered)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (name, email, phone, course_name, course_code, level, section, 0, date_registered))
-        student_id = c.lastrowid  # assign student_id here
+        # Ensure courses exist and map them to the student
+        for cname in course_names:
+            cname = (cname or '').strip()
+            if not cname:
+                continue
+            c.execute("INSERT OR IGNORE INTO courses (name) VALUES (?)", (cname,))
+            c.execute("SELECT id FROM courses WHERE name = ?", (cname,))
+            crow = c.fetchone()
+            if crow:
+                cid = crow[0]
+                c.execute("INSERT OR IGNORE INTO student_courses (student_id, course_id) VALUES (?, ?)", (student_id, cid))
 
         # Save face image if provided
         image_data = data.get('image')
@@ -395,8 +529,7 @@ def save_user():
 
         conn.commit()
         
-        # Return success here inside try block
-        return jsonify({'status': 'success', 'message': 'Student registered successfully', 'student_id': student_id})
+        return jsonify({'status': 'success', 'message': 'Student registered/updated successfully', 'student_id': student_id})
 
     except sqlite3.Error as e:
         return jsonify({'status': 'error', 'message': f'Database error: {str(e)}'}), 500
@@ -445,15 +578,91 @@ def delete_student(student_id):
     conn.close()
     return jsonify({'message': 'Student deleted successfully'}), 200
 
+@app.route('/api/students/<int:student_id>/courses', methods=['GET'])
+def get_student_courses(student_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''
+        SELECT c.name
+          FROM student_courses sc
+          JOIN courses c ON c.id = sc.course_id
+         WHERE sc.student_id = ?
+         ORDER BY c.name
+    ''', (student_id,))
+    names = [row[0] for row in c.fetchall()]
+    conn.close()
+    return jsonify({'courses': names})
+
+@app.route('/api/students/<int:student_id>/courses', methods=['PUT','POST'])
+def set_student_courses(student_id):
+    if 'admin' not in session:
+        return jsonify({'status': 'error', 'message': 'Admin access required'}), 401
+    data = request.get_json(force=True) or {}
+    course_names = data.get('course_names') or []
+    # Normalize names and dedupe
+    norm = []
+    seen = set()
+    for n in course_names:
+        s = (n or '').strip()
+        if s and s.lower() not in seen:
+            seen.add(s.lower())
+            norm.append(s)
+    if len(norm) == 0:
+        return jsonify({'status': 'error', 'message': 'At least one course is required'}), 400
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        # Ensure student exists
+        c.execute('SELECT id FROM students WHERE id = ?', (student_id,))
+        row = c.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'status': 'error', 'message': 'Student not found'}), 404
+
+        c.execute('BEGIN IMMEDIATE')
+        # Clear existing mappings
+        c.execute('DELETE FROM student_courses WHERE student_id = ?', (student_id,))
+        # Upsert courses and re-map
+        first_course = ''
+        for idx, cname in enumerate(norm):
+            c.execute('INSERT OR IGNORE INTO courses (name) VALUES (?)', (cname,))
+            c.execute('SELECT id FROM courses WHERE name = ?', (cname,))
+            cid = c.fetchone()[0]
+            c.execute('INSERT OR IGNORE INTO student_courses (student_id, course_id) VALUES (?, ?)', (student_id, cid))
+            if idx == 0:
+                first_course = cname
+        # Update legacy column for compatibility
+        c.execute('UPDATE students SET course = ? WHERE id = ?', (first_course, student_id))
+
+        c.execute('COMMIT')
+        conn.close()
+        return jsonify({'status': 'success', 'message': 'Courses updated successfully'})
+    except Exception as e:
+        try:
+            c.execute('ROLLBACK')
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'status': 'error', 'message': f'Failed to set courses: {str(e)}'}), 500
+
 @app.route('/api/dashboard-cards')
 def dashboard_cards():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    c.execute("SELECT COUNT(*) FROM students")
-    total_users = c.fetchone()[0]
+    # Count unique students by email (preferred) or name to align with dashboard table de-duplication
+    c.execute("SELECT name, email FROM students")
+    keys = set()
+    for name, email in c.fetchall():
+        key = (email or '').strip().lower() or (name or '').strip().lower()
+        if key:
+            keys.add(key)
+    total_users = len(keys)
 
-    c.execute("SELECT COUNT(DISTINCT course) FROM students")
+    c.execute("SELECT COUNT(*) FROM courses")
     total_courses = c.fetchone()[0]
 
     today = datetime.now().strftime('%Y-%m-%d')
@@ -465,13 +674,16 @@ def dashboard_cards():
 
     conn.close()
 
-    return jsonify({
+    resp = jsonify({
         'totalUsers': total_users,
         'totalCourses': total_courses,
         'totalSchedules': total_schedules,  
         'attendanceRecords': attendance_records,
-        
     })
+    # Prevent caching so manual refresh always reflects current state
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 
 @app.route('/api/known_faces')
@@ -515,10 +727,9 @@ def mark_present_by_name(student_name, course_identifier, date, time):
         return 'error', 'Student not found', 404
     student_id = result[0]
 
-    # Use course name directly since the attendance table stores course names
+    # Resolve course name
     course_name = course_identifier
     if isinstance(course_identifier, int):
-        # If course_id is passed, get the course name
         c.execute("SELECT name FROM courses WHERE id = ?", (course_identifier,))
         course_row = c.fetchone()
         if course_row:
@@ -527,14 +738,31 @@ def mark_present_by_name(student_name, course_identifier, date, time):
             conn.close()
             return 'error', 'Course not found', 400
 
-    # IMPROVED: Check for existing attendance using both student_id and name/course as fallback
-    # Primary check using student_id and course name
+    # Ensure course exists
+    c.execute("SELECT id FROM courses WHERE name = ?", (course_name,))
+    row_course = c.fetchone()
+    if not row_course:
+        conn.close()
+        return 'error', 'Course not found', 400
+    course_id = row_course[0]
+
+    # Validate enrollment: student must be registered to this course
+    c.execute("""
+        SELECT 1
+          FROM student_courses
+         WHERE student_id = ? AND course_id = ?
+    """, (student_id, course_id))
+    if not c.fetchone():
+        conn.close()
+        return 'error', 'Student not registered for the selected course', 403
+
+    # Check for existing attendance (primary: by student_id)
     c.execute("SELECT 1 FROM attendance WHERE student_id = ? AND course = ? AND date = ?", (student_id, course_name, date))
     if c.fetchone():
         conn.close()
         return 'error', 'Attendance already marked for this student and course today', 400
     
-    # Secondary check using name and course (for backward compatibility)
+    # Fallback check by name
     c.execute("SELECT 1 FROM attendance WHERE name = ? AND course = ? AND date = ?", (student_name, course_name, date))
     if c.fetchone():
         conn.close()
@@ -773,40 +1001,91 @@ def get_absent_students():
 
 @app.route('/api/students-by-course/<course_name>')
 def get_students_by_course(course_name):
-    """Get all students enrolled in a specific course"""
+    """Get unique students enrolled in a specific course.
+    De-duplicates by email (preferred) or normalized full name, selecting the smallest student id as canonical.
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Get all students for the specified course
+    # Get all students for the specified course via mapping table
     cursor.execute('''
-        SELECT id, name, email, phone, course, level, section, date_registered
-        FROM students WHERE course = ?
-        ORDER BY name
+        SELECT s.id, s.name, s.email, s.phone, s.level, s.section, s.date_registered
+        FROM students s
+        JOIN student_courses sc ON sc.student_id = s.id
+        JOIN courses c ON c.id = sc.course_id
+        WHERE c.name = ?
+        ORDER BY s.name
     ''', (course_name,))
-    students = cursor.fetchall()
+    rows = cursor.fetchall()
     
-    # Check which students are already marked present today
+    # Check which students are already marked present today (by name for backward compat)
     today_date = datetime.now().strftime('%Y-%m-%d')
     cursor.execute('''
         SELECT DISTINCT name FROM attendance 
         WHERE course = ? AND date = ?
     ''', (course_name, today_date))
-    present_today = set(row[0] for row in cursor.fetchall())
+    present_today_names = set(row[0].strip().lower() for row in cursor.fetchall() if row[0])
+    
+    # De-duplicate by email or normalized name; keep smallest id as canonical
+    merged = {}
+    for sid, name, email, phone, level, section, date_registered in rows:
+        key = (email or '').strip().lower() or (name or '').strip().lower()
+        if not key:
+            # Fallback: use id to avoid dropping anonymous rows
+            key = f'id:{sid}'
+        if key not in merged:
+            merged[key] = {
+                'id': sid,
+                'name': name,
+                'email': email,
+                'phone': phone,
+                'level': level,
+                'section': section,
+                'date_registered': date_registered,
+                'is_present_today': (name or '').strip().lower() in present_today_names,
+            }
+        else:
+            m = merged[key]
+            # Use the smallest id as canonical and prefer non-empty fields
+            if sid < m['id']:
+                m['id'] = sid
+                m['name'] = name or m['name']
+                m['email'] = email or m['email']
+                m['phone'] = phone or m['phone']
+                m['level'] = level or m['level']
+                m['section'] = section or m['section']
+                m['date_registered'] = min(m['date_registered'], date_registered) if (m['date_registered'] and date_registered) else (m['date_registered'] or date_registered)
+            else:
+                # Fill missing fields from this duplicate row
+                if not m['name'] and name: m['name'] = name
+                if not m['email'] and email: m['email'] = email
+                if not m['phone'] and phone: m['phone'] = phone
+                if not m['level'] and level: m['level'] = level
+                if not m['section'] and section: m['section'] = section
+                if m['date_registered'] and date_registered:
+                    m['date_registered'] = min(m['date_registered'], date_registered)
+                elif date_registered:
+                    m['date_registered'] = date_registered
+            # If any duplicate is present today, mark present
+            if (name or '').strip().lower() in present_today_names:
+                m['is_present_today'] = True
     
     data = []
-    for student in students:
+    for m in merged.values():
         data.append({
-            'id': student[0],
-            'name': student[1],
-            'email': student[2],
-            'phone': student[3],
-            'course': student[4],
-            'level': student[5],
-            'section': student[6],
-            'date_registered': student[7],
-            'is_present_today': student[1] in present_today
+            'id': m['id'],
+            'name': m['name'],
+            'email': m['email'],
+            'phone': m['phone'],
+            'course': course_name,
+            'level': m['level'],
+            'section': m['section'],
+            'date_registered': m['date_registered'],
+            'is_present_today': m['is_present_today']
         })
     
+    # Sort by name
+    data.sort(key=lambda x: (x['name'] or '').lower())
     conn.close()
     return jsonify(data)
 
@@ -1038,16 +1317,67 @@ def download_today_pdf():
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name=f"Attendance_{date_str}.pdf", mimetype='application/pdf')
 
-@app.route('/api/courses')
+@app.route('/download-today-csv')
+def download_today_csv():
+    date_str = request.args.get('date')
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT name, course, level, section, date, time, status
+        FROM attendance
+        WHERE date = ?
+        ORDER BY time
+    ''', (date_str,))
+    data = cursor.fetchall()
+    conn.close()
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Name', 'Course', 'Level', 'Section', 'Date', 'Time', 'Status'])
+    writer.writerows(data)
+    output.seek(0)
+
+    return send_file(
+        BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        download_name=f'Attendance_{date_str}.csv',
+        as_attachment=True
+    )
+
+@app.route('/api/courses', methods=['GET'])
 def get_courses():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('SELECT id, course FROM students GROUP BY course ORDER BY course')
+    cursor.execute('SELECT id, name FROM courses ORDER BY name')
     rows = cursor.fetchall()
     conn.close()
 
     courses = [{'id': row[0], 'name': row[1]} for row in rows]
     return jsonify({'courses': courses})
+
+@app.route('/api/courses', methods=['POST'])
+def create_course():
+    if 'admin' not in session:
+        return jsonify({'error': 'Admin access required'}), 401
+    data = request.get_json(force=True)
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Course name is required'}), 400
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('INSERT OR IGNORE INTO courses (name) VALUES (?)', (name,))
+        conn.commit()
+        # Fetch the (possibly existing) id
+        cursor.execute('SELECT id, name FROM courses WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        conn.close()
+        return jsonify({'course': {'id': row[0], 'name': row[1]}}), 201
+    except Exception as e:
+        return jsonify({'error': f'Failed to create course: {str(e)}'}), 500
 
 @app.route('/download-course-pdf')
 def download_course_pdf():
@@ -1226,6 +1556,18 @@ def submit_attendance():
             conn.close()
             return jsonify({'status': 'error', 'message': 'Student not found'}), 400
         student_name = student_row[0]
+
+        # Validate enrollment in selected course
+        cursor.execute("SELECT id FROM courses WHERE name = ?", (course_name,))
+        rc = cursor.fetchone()
+        if not rc:
+            conn.close()
+            return jsonify({'status': 'error', 'message': 'Course not found'}), 400
+        course_id = rc[0]
+        cursor.execute("SELECT 1 FROM student_courses WHERE student_id = ? AND course_id = ?", (student_id, course_id))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'status': 'error', 'message': 'Student not registered for the selected course'}), 403
 
         # IMPROVED: Multiple duplicate checks for robustness
         # Check by student_id and course_name (primary)

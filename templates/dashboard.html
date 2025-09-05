@@ -144,6 +144,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Ensure the course cell can show the + button even with long text */
+  td.course { overflow: visible !important; }
+  .course-cell { display: flex; align-items: center; gap: 6px; }
+  .course-cell .course-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   td button {
     padding: 2px 6px;
     font-size: 11px;
@@ -271,7 +275,7 @@
 
   <h1>Dashboard</h1>
   <div>
-    <button onclick="loadDashboardCards()">Refresh Stats</button>
+    <button onclick="refreshStats()">Refresh Stats</button>
     <div class="cards">
       <div class="card"><strong>Total Students:</strong> <span id="totalUsers">0</span></div>
       <div class="card"><strong>Total Courses:</strong> <span id="totalCourses">0</span></div>
@@ -282,6 +286,7 @@
   </div>
 
   <h2>Registered Students</h2>
+
   <button onclick="loadRegisteredStudents()">Refresh Student List</button>
   <button onclick="downloadCSV()">Download CSV</button>
 
@@ -304,6 +309,29 @@
     <tbody></tbody>
   </table>
 
+  <!-- Manage Courses Modal -->
+  <div id="courseModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:#fff; width:90%; max-width:520px; border-radius:12px; padding:16px; box-shadow:0 10px 24px rgba(0,0,0,.2)">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <h3 style="margin:0;">Manage Courses for <span id="modalStudentName"></span></h3>
+        <button onclick="closeCourseModal()" style="background:#e5e7eb; color:#111;">✖</button>
+      </div>
+      <div>
+        <input id="courseSearchModal" type="text" placeholder="Search courses..." oninput="filterModalCourses()" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:6px;"/>
+      </div>
+      <div id="modalCourseOptions" style="margin-top:10px; max-height:280px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; padding:8px; background:#fafafa">Loading...</div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <input id="newCourseNameModal" type="text" placeholder="Add new course" style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px;"/>
+        <button onclick="addCourseFromModal()" class="btn" style="background:#3b82f6;">Add</button>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+        <button onclick="closeCourseModal()" class="btn" style="background:#6b7280;">Cancel</button>
+        <button onclick="saveStudentCourses()" class="btn" style="background:#10b981;">Save</button>
+      </div>
+      <input type="hidden" id="modalStudentId"/>
+    </div>
+  </div>
+
   <!-- Floating Action Button for Bulk Attendance -->
   <a href="/bulk_attendance" class="fab" title="Bulk Attendance">
     <div class="fab-tooltip">Bulk Attendance</div>
@@ -313,7 +341,7 @@
   <script>
     async function loadDashboardCards() {
       try {
-        const res = await fetch('/api/dashboard-cards');
+        const res = await fetch('/api/dashboard-cards?ts=' + Date.now());
         const data = await res.json();
         document.getElementById('totalUsers').textContent = data.totalUsers;
         document.getElementById('totalCourses').textContent = data.totalCourses;
@@ -342,7 +370,12 @@
             <td class="name">${student.fullname}</td>
             <td class="email">${student.email}</td>
             <td class="phone">${student.phone}</td>
-            <td class="course">${student.course}</td>
+            <td class="course">
+              <div class="course-cell">
+                <span class="course-text">${student.course || ''}</span>
+                <button class="btn" style="padding:2px 6px; background:#10b981;" title="Manage courses" data-action="courses" data-student-id="${student.id}" data-student-name=${JSON.stringify(student.fullname)}>+</button>
+              </div>
+            </td>
             <td class="level">${student.level}</td>
             <td class="section">${student.section}</td>
             <td class="date">${student.date_registered}</td>
@@ -360,9 +393,10 @@
 
     async function loadPresentAndAbsentLists() {
   try {
+    const ts = Date.now();
     const [registeredRes, attendanceRes] = await Promise.all([
-      fetch('/api/dashboard-data'),
-      fetch('/api/today_attendance')
+      fetch('/api/dashboard-data?ts=' + ts),
+      fetch('/api/today_attendance?ts=' + ts)
     ]);
     const registered = await registeredRes.json();
     const present = (await attendanceRes.json()).attendance;
@@ -471,6 +505,200 @@
       }
     }
 
+    // ----- Manage Courses Modal Logic -----
+    let MODAL_COURSES_ALL = [];
+    let MODAL_COURSES_ASSIGNED = new Set();
+    let MODAL_COURSES_ASSIGNED_LOWER = new Set();
+    let PENDING_ASSIGNED_FROM_ROW = [];
+
+    function openCourseModal(studentId, studentName) {
+      document.getElementById('modalStudentId').value = studentId;
+      document.getElementById('modalStudentName').textContent = studentName || '';
+      MODAL_COURSES_ALL = [];
+      MODAL_COURSES_ASSIGNED = new Set();
+      MODAL_COURSES_ASSIGNED_LOWER = new Set();
+      const modal = document.getElementById('courseModal');
+      if (modal) { modal.style.display = 'flex'; }
+      console.debug('Opening course modal for student:', studentId, studentName);
+      loadModalData(studentId);
+    }
+
+    function closeCourseModal() {
+      const modal = document.getElementById('courseModal');
+      if (modal) { modal.style.display = 'none'; }
+    }
+
+    async function loadModalData(studentId) {
+      const ts = Date.now();
+      try {
+        const [allCoursesRes, studentCoursesRes] = await Promise.all([
+          fetch('/api/courses?ts=' + ts, { cache: 'no-store' }),
+          fetch(`/api/students/${studentId}/courses?ts=${ts}`, { cache: 'no-store' })
+        ]);
+
+        let allCourses = [];
+        if (allCoursesRes.ok) {
+          try {
+            const allCoursesJSON = await allCoursesRes.json();
+            allCourses = Array.isArray(allCoursesJSON.courses) ? allCoursesJSON.courses : [];
+          } catch (e) {
+            console.warn('Parsing /api/courses JSON failed, will try fallback.');
+          }
+        } else {
+          console.warn('GET /api/courses failed:', allCoursesRes.status);
+        }
+
+        // Fallback: derive courses from dashboard data if /api/courses not available
+        if (!allCourses.length) {
+          try {
+            const dash = await fetch('/api/dashboard-data?ts=' + ts, { cache: 'no-store' });
+            const dashList = await dash.json();
+            const set = new Set();
+            (dashList || []).forEach(st => {
+              const s = (st.course || '').split(',').map(x=>x.trim()).filter(Boolean);
+              s.forEach(x => set.add(x));
+            });
+            allCourses = Array.from(set).map(name => ({ name }));
+          } catch (e) {
+            console.error('Fallback derive courses from dashboard-data failed:', e);
+          }
+        }
+
+        let studentCourses = [];
+        if (studentCoursesRes.ok) {
+          try {
+            const studentCoursesJSON = await studentCoursesRes.json();
+            studentCourses = Array.isArray(studentCoursesJSON.courses) ? studentCoursesJSON.courses : [];
+          } catch (e) {
+            console.warn('Parsing student courses JSON failed, will try fallback.');
+          }
+        } else {
+          console.warn(`GET /api/students/${studentId}/courses failed:`, studentCoursesRes.status);
+        }
+
+        // Merge fallbacks: dashboard-data row and immediate row text snapshot
+        let derivedFromDash = [];
+        try {
+          const dash = await fetch('/api/dashboard-data?ts=' + ts, { cache: 'no-store' });
+          const dashList = await dash.json();
+          const found = (dashList || []).find(st => String(st.id) === String(studentId));
+          if (found && found.course) {
+            derivedFromDash = found.course.split(',').map(s => s.trim()).filter(Boolean);
+          }
+        } catch (e) {
+          console.warn('Fallback derive student courses from dashboard-data failed:', e);
+        }
+
+        // Combine all sources and dedupe
+        const combinedAssigned = [...(studentCourses||[]), ...(derivedFromDash||[]), ...(PENDING_ASSIGNED_FROM_ROW||[])];
+
+        MODAL_COURSES_ALL = allCourses.map(c => (typeof c === 'string' ? c : c.name)).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+        // Normalize assigned courses (trim, keep original case where possible)
+        const normalizedAssigned = combinedAssigned.map(s => (s || '').trim()).filter(Boolean);
+        MODAL_COURSES_ASSIGNED = new Set(normalizedAssigned);
+        MODAL_COURSES_ASSIGNED_LOWER = new Set(normalizedAssigned.map(s => s.toLowerCase()))
+        console.debug('Modal data -> All courses:', MODAL_COURSES_ALL, 'Assigned:', Array.from(MODAL_COURSES_ASSIGNED));
+        renderModalCourses();
+      } catch (e) {
+        console.error('loadModalData error:', e);
+        document.getElementById('modalCourseOptions').innerHTML = '<div style="color:#b91c1c;">Failed to load courses</div>';
+      }
+    }
+
+    function renderModalCourses() {
+      const container = document.getElementById('modalCourseOptions');
+      const searchEl = document.getElementById('courseSearchModal');
+      const q = (searchEl && searchEl.value ? searchEl.value : '').toLowerCase();
+      const list = MODAL_COURSES_ALL.filter(name => name.toLowerCase().includes(q));
+      if (list.length === 0) {
+        container.innerHTML = '<div>No courses. Add one above.</div>';
+        return;
+      }
+      container.innerHTML = '';
+      list.forEach(name => {
+        const lbl = document.createElement('label');
+        lbl.style.display = 'block';
+        lbl.style.padding = '6px 4px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = name;
+        cb.checked = MODAL_COURSES_ASSIGNED_LOWER.has(name.toLowerCase());
+        cb.addEventListener('change', () => {
+          if (cb.checked) {
+            MODAL_COURSES_ASSIGNED.add(name);
+            MODAL_COURSES_ASSIGNED_LOWER.add(name.toLowerCase());
+          } else {
+            // Prevent removing the last remaining course
+            if (MODAL_COURSES_ASSIGNED_LOWER.size <= 1) {
+              cb.checked = true;
+              alert('A student must be assigned to at least one course.');
+              return;
+            }
+            MODAL_COURSES_ASSIGNED.delete(name);
+            MODAL_COURSES_ASSIGNED_LOWER.delete(name.toLowerCase());
+          }
+        });
+        lbl.appendChild(cb);
+        const span = document.createElement('span');
+        span.textContent = ' ' + name;
+        lbl.appendChild(span);
+        container.appendChild(lbl);
+      });
+    }
+
+    function filterModalCourses() {
+      renderModalCourses();
+    }
+
+    async function addCourseFromModal() {
+      const name = document.getElementById('newCourseNameModal').value.trim();
+      if (!name) { alert('Enter a course name'); return; }
+      try {
+        const res = await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        if (!res.ok) {
+          const j = await res.json().catch(()=>({error:'Unknown error'}));
+          alert('Failed to add course: ' + (j.error || res.statusText));
+          return;
+        }
+        document.getElementById('newCourseNameModal').value = '';
+        // Update local list and re-render
+        MODAL_COURSES_ALL.push(name);
+        MODAL_COURSES_ALL.sort((a,b)=>a.localeCompare(b));
+        MODAL_COURSES_ASSIGNED.add(name);
+        renderModalCourses();
+      } catch (e) {
+        alert('Failed to add course');
+      }
+    }
+
+    async function saveStudentCourses() {
+      const studentId = document.getElementById('modalStudentId').value;
+      const names = Array.from(MODAL_COURSES_ASSIGNED);
+      try {
+        if (!names.length) {
+          alert('Please select at least one course.');
+          return;
+        }
+        const res = await fetch(`/api/students/${studentId}/courses`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ course_names: names })
+        });
+        const j = await res.json();
+        if (!res.ok || j.status === 'error') {
+          alert('Failed to save: ' + (j.message || res.statusText));
+          return;
+        }
+        // Refresh the student list and stats so courses reflect new mapping
+        loadRegisteredStudents();
+        refreshStats();
+        closeCourseModal();
+        alert('Courses updated');
+      } catch (e) {
+        alert('Network error saving courses');
+      }
+    }
+
     function cancelEdit(btn, id) {
       const row = btn.closest('tr');
       const originalHTML = row.getAttribute('data-original-html');
@@ -494,6 +722,12 @@
         });
         row.style.display = show ? '' : 'none';
       });
+    }
+
+    function refreshStats() {
+      // Refresh cards and absentee count
+      loadDashboardCards();
+      loadPresentAndAbsentLists();
     }
 
     function downloadCSV() {
@@ -522,6 +756,24 @@
       loadDashboardCards();
       loadRegisteredStudents();
       loadPresentAndAbsentLists();
+
+      // Delegate clicks for any Courses buttons (works for dynamically rendered rows)
+      const table = document.getElementById('studentsTable');
+      table.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="courses"]');
+        if (btn) {
+          const id = parseInt(btn.getAttribute('data-student-id'));
+          const name = btn.getAttribute('data-student-name') || '';
+          // Derive current courses from the row's course cell as an immediate fallback
+          PENDING_ASSIGNED_FROM_ROW = [];
+          const row = btn.closest('tr');
+          const ctext = row?.querySelector('.course-text')?.textContent || '';
+          if (ctext) {
+            PENDING_ASSIGNED_FROM_ROW = ctext.split(',').map(s=>s.trim()).filter(Boolean);
+          }
+          openCourseModal(id, name);
+        }
+      });
       
       // Add pulse effect to FAB for 5 seconds on page load
       const fab = document.querySelector('.fab');
@@ -532,6 +784,7 @@
         }, 5000);
       }
     });
+
   </script>
 </body>
 </html>

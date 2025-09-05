@@ -1,3 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.python-version
+.env
+.venv
+venv/
+venv*/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build/test
+build/
+dist/
+.eggs/
+.wheels/
+.pytest_cache/
+.mypy_cache/
+coverage/
+
+# Node
+node_modules/
+
+# App data (local runtime files)
+attendance.db
+encodings.pkl
+captured_faces/
+faces/
+encodings/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
 # Byte-compiled / optimized / DLL files
 _pycache_/
 *.py[cod]

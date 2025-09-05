@@ -97,6 +97,9 @@
     <div class="right">
       <h2>Recognition Log</h2>
       <p id="course-info" style="font-size: 16px; color: #2710ba; margin-bottom: 10px;"></p>
+      <div style="font-size:14px; color:#444; margin-bottom:6px;">
+        Detector: <strong id="detector-status">Tiny (Auto)</strong>
+      </div>
       <p id="result"></p>
     </div>
   </div>
@@ -110,6 +113,7 @@ window.onload = async function () {
     const result = document.getElementById('result');
     const loadingText = document.getElementById('loadingText');
     const videoContainer = document.querySelector('.video-container');
+    const detectorStatus = document.getElementById('detector-status');
 
     const urlParams = new URLSearchParams(window.location.search);
     const courseName = urlParams.get('course_name') || sessionStorage.getItem('selectedCourse');
@@ -128,18 +132,36 @@ window.onload = async function () {
     let labeledDescriptors = [];
     let faceMatcher;
 
+    // Detection/recognition settings for longer distance
+    const MATCH_TOLERANCE = 0.64; // a bit more lenient than default 0.6
+    const TINY_INPUT_SIZE = 416;  // 320, 416, 512; bigger = better small-face detection
+    const TINY_SCORE_THRESHOLD = 0.4; // lower threshold to pick up smaller faces
+    const SSD_MIN_CONF = 0.35;    // lower minConfidence for low light
+    const DETECT_INTERVAL_MS = 1200;  // run detection ~1.2s
+    const LOW_LIGHT_LUMA = 80;        // luma threshold to switch to SSD
+
     // Load Models
-    await Promise.all([
+    const modelLoads = [
         faceapi.nets.faceRecognitionNet.loadFromUri('/static/models'),
         faceapi.nets.faceLandmark68Net.loadFromUri('/static/models'),
+        faceapi.nets.tinyFaceDetector.loadFromUri('/static/models'),
         faceapi.nets.ssdMobilenetv1.loadFromUri('/static/models')
-    ]);
+    ];
+    await Promise.all(modelLoads);
 
     startVideo();
     await loadLabeledData();
 
     function startVideo() {
-        navigator.mediaDevices.getUserMedia({ video: {} })
+        const constraints = {
+            audio: false,
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: "user"
+            }
+        };
+        navigator.mediaDevices.getUserMedia(constraints)
             .then(stream => {
                 video.srcObject = stream;
                 loadingText.style.display = 'none';
@@ -157,16 +179,41 @@ window.onload = async function () {
             const descriptors = person.descriptors.map(d => new Float32Array(d));
             return new faceapi.LabeledFaceDescriptors(person.label, descriptors);
         });
-        faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+        faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, MATCH_TOLERANCE);
     }
+
+    function tinyOptions() {
+        return new faceapi.TinyFaceDetectorOptions({ inputSize: TINY_INPUT_SIZE, scoreThreshold: TINY_SCORE_THRESHOLD });
+    }
+    function ssdOptions() {
+        return new faceapi.SsdMobilenetv1Options({ minConfidence: SSD_MIN_CONF });
+    }
+
+    // Offscreen canvas for brightness sampling
+    let sampleCanvas;
+    let sampleCtx;
 
     video.addEventListener('play', () => {
         overlay.width = video.videoWidth;
         overlay.height = video.videoHeight;
         const ctx = overlay.getContext('2d');
 
+        sampleCanvas = document.createElement('canvas');
+        sampleCanvas.width = Math.max(160, Math.floor(video.videoWidth / 4));
+        sampleCanvas.height = Math.max(120, Math.floor(video.videoHeight / 4));
+        sampleCtx = sampleCanvas.getContext('2d');
+
         setInterval(async () => {
-            const detections = await faceapi.detectAllFaces(video)
+            // Draw current frame small for quick brightness sampling
+            sampleCtx.drawImage(video, 0, 0, sampleCanvas.width, sampleCanvas.height);
+            const imgData = sampleCtx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height);
+            const avgLuma = estimateLuma(imgData.data);
+
+            const useSSD = avgLuma < LOW_LIGHT_LUMA;
+            detectorStatus.textContent = useSSD ? 'SSD (Low light)' : 'Tiny';
+
+            const detections = await faceapi
+                .detectAllFaces(video, useSSD ? ssdOptions() : tinyOptions())
                 .withFaceLandmarks()
                 .withFaceDescriptors();
 
@@ -188,8 +235,22 @@ window.onload = async function () {
                 // Send attendance with course ID
                 sendAttendance(match.label);
             });
-        }, 5000);
+        }, DETECT_INTERVAL_MS);
     });
+
+    // --- Brightness helper ---
+    function estimateLuma(data) {
+        // Sample every 16th pixel for speed
+        let sum = 0, count = 0;
+        for (let i = 0; i < data.length; i += 16 * 4) {
+            const r = data[i], g = data[i+1], b = data[i+2];
+            // Rec. 709 luma
+            const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            sum += y;
+            count++;
+        }
+        return count ? (sum / count) : 255;
+    }
 
     let lastRecognizedName = null;
     let lastRecognitionTime = 0;

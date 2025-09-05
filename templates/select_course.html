@@ -112,7 +112,7 @@ function onFaceRecognized(studentId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       student_id: studentId,
-      course: window.selectedCourseName
+      course_name: window.selectedCourseName
     })
   })
   .then(response => response.json())

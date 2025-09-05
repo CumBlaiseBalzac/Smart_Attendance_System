@@ -340,6 +340,10 @@
             loadCourses();
             setupEventListeners();
         });
+        
+        // Read initial course from URL (if provided) to auto-load
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialCourse = urlParams.get('course') || '';
 
         function setupEventListeners() {
             courseSelect.addEventListener('change', function() {
@@ -392,6 +396,17 @@
                     option.textContent = course.name;
                     courseSelect.appendChild(option);
                 });
+                
+                // If a course is provided via URL, select and auto-load it
+                if (initialCourse) {
+                    const match = Array.from(courseSelect.options).find(o => o.value === initialCourse);
+                    if (match) {
+                        courseSelect.value = initialCourse;
+                        loadStudents.disabled = false;
+                        // Automatically load students for convenience
+                        loadStudentsForCourse(initialCourse);
+                    }
+                }
             } catch (error) {
                 showAlert('Error loading courses: ' + error.message, 'danger');
             }
